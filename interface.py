@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 # monitor.py
-# Versão atualizada: lembra a última extensão escolhida (entrada/saída) e persiste no arquivo de configuração.
 
 import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext, messagebox, simpledialog
@@ -10,14 +9,14 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
-import set  # seu módulo set.py
+import set  
 
 # ==================== CONFIGURAÇÃO DE DIRETÓRIO ====================
 
 def obter_diretorio_atlas():
     """
-    Retorna o caminho do diretório Atlas em AppData/Local.
-    Cria o diretório se não existir.
+    Retorna o caminho do diretório Atlas em AppData/Local. 
+    Cria o diretório se não existir. 
     """
     # Usa AppData/Local para dados de aplicação no Windows
     appdata_local = os.getenv('LOCALAPPDATA')
@@ -46,6 +45,309 @@ DIRETORIO_ATLAS = obter_diretorio_atlas()
 CONFIG_FILE = os.path.join(DIRETORIO_ATLAS, "config_pastas.json")
 
 
+# ==================== FUNÇÕES DE DETECÇÃO REVIT ====================
+
+def detectar_versoes_revit():
+    """
+    Detecta versões de Revit instaladas no sistema. 
+    Procura em C:\\Program Files\\Autodesk\\
+    Retorna lista de tuplas: [(nome_versao, caminho_executavel), ...]
+    """
+    versoes_encontradas = []
+    
+    try:
+        program_files = os.path.join(os.environ.get('ProgramFiles', 'C:\\Program Files'), 'Autodesk')
+        
+        if not os.path.exists(program_files):
+            print(f"[INFO] Diretório Autodesk não encontrado: {program_files}")
+            return versoes_encontradas
+        
+        # Procura por pastas de Revit (Revit 2023, Revit 2024, etc.)
+        for item in os.listdir(program_files):
+            if item.startswith('Revit'):
+                revit_path = os.path.join(program_files, item)
+                
+                if os.path.isdir(revit_path):
+                    # Procura pelo executável Revit. exe
+                    revit_exe = os.path.join(revit_path, 'Revit.exe')
+                    
+                    if os.path.exists(revit_exe):
+                        versoes_encontradas.append((item, revit_exe))
+                        print(f"[INFO] Revit detectado: {item} -> {revit_exe}")
+        
+        # Ordena por versão (mais recente primeiro)
+        versoes_encontradas.sort(reverse=True)
+        
+    except Exception as e:
+        print(f"[ERRO] Erro ao detectar Revit: {e}")
+    
+    return versoes_encontradas
+
+
+def executar_clover_rvt_para_nwc(revit_path, tempo_espera=75):
+    """
+    Executa a ação CLOVER > RVT para NWC no Revit após sua abertura.
+    Detecta os botões na tela usando template matching (busca de imagem).
+    
+    Args:
+        revit_path: Caminho completo do executável Revit.exe
+        tempo_espera: Tempo em segundos para aguardar antes de executar (padrão: 75 = 1min 15seg)
+    """
+    try:
+        import pyautogui
+        import time
+        
+        # Extrai a versão do Revit do caminho
+        versao = os.path.basename(os.path.dirname(revit_path))
+        print(f"[INFO] Executando CLOVER para {versao}")
+        
+        # Revit 2016 não tem suporte, pula a execução
+        if "2016" in versao:
+            print(f"[INFO] Revit 2016 detectado - pulando execução de CLOVER")
+            return
+        
+        # Aguarda o tempo especificado com barra de progresso
+        print(f"[INFO] Aguardando {tempo_espera} segundos para o Revit inicializar...")
+        for segundo in range(tempo_espera, 0, -1):
+            # Cria barra de progresso
+            barra = int((tempo_espera - segundo) / tempo_espera * 30)  # 30 caracteres de barra
+            progresso = f"\r[{'█' * barra}{'░' * (30 - barra)}] {segundo}s restantes"
+            print(progresso, end='', flush=True)
+            time.sleep(1)
+        
+        print(f"\n[INFO] Tempo completo! Iniciando execução do CLOVER...")
+        time.sleep(0.5)
+        
+        # Caminho das imagens dos botões
+        atlas_path = os.path.dirname(os.path.dirname(os.path.dirname(revit_path)))
+        img_clover = os.path.join(atlas_path, "botoes", "clover.png")
+        img_rvt_nwc = os.path.join(atlas_path, "botoes", "rvt_para_nwc.png")
+        
+        print(f"[DEBUG] Procurando imagem em: {img_clover}")
+        print(f"[DEBUG] Procurando imagem em: {img_rvt_nwc}")
+        
+        # Procura pelo botão "CLOVER" usando template matching
+        print(f"[INFO] Procurando botão CLOVER na tela...")
+        try:
+            clover_pos = pyautogui.locateOnScreen(img_clover, confidence=0.7)
+            if clover_pos:
+                print(f"[INFO] CLOVER encontrado em {clover_pos}, clicando...")
+                pyautogui.click(clover_pos[0] + 30, clover_pos[1] + 15)
+                time.sleep(1.5)
+            else:
+                print(f"[AVISO] Botão CLOVER não encontrado")
+                print(f"[INFO] Verifique se o arquivo existe: {img_clover}")
+                return
+        except Exception as e:
+            print(f"[ERRO] Erro ao procurar CLOVER: {e}")
+            return
+        
+        # Procura pelo botão "RVT para NWC"
+        print(f"[INFO] Procurando botão RVT para NWC na tela...")
+        try:
+            rvt_nwc_pos = pyautogui.locateOnScreen(img_rvt_nwc, confidence=0.7)
+            if rvt_nwc_pos:
+                print(f"[INFO] RVT para NWC encontrado em {rvt_nwc_pos}, clicando...")
+                pyautogui.click(rvt_nwc_pos[0] + 30, rvt_nwc_pos[1] + 15)
+                print(f"[INFO] ✓ CLOVER > RVT para NWC executado com sucesso!")
+            else:
+                print(f"[AVISO] Botão RVT para NWC não encontrado")
+                print(f"[INFO] Verifique se o arquivo existe: {img_rvt_nwc}")
+        except Exception as e:
+            print(f"[ERRO] Erro ao procurar RVT para NWC: {e}")
+            
+    except ImportError:
+        print(f"[AVISO] pyautogui não instalado")
+        print(f"[AVISO] Instale com: pip install pyautogui")
+    except Exception as e:
+        print(f"[ERRO] Erro ao executar CLOVER: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def abrir_revit(revit_path):
+    """
+    Abre a aplicação Revit selecionada.
+    Verifica se a MESMA versão do Revit já está em execução.
+    Se outra versão estiver aberta, abre a nova versão selecionada.
+    
+    Args:
+        revit_path: Caminho completo do executável Revit.exe
+    
+    Returns:
+        dict: {'sucesso': bool, 'ja_estava_aberto': bool}
+    """
+    try:
+        if not os.path.exists(revit_path):
+            messagebox.showerror("Erro", f"Revit não encontrado em:\n{revit_path}")
+            return {'sucesso': False, 'ja_estava_aberto': False}
+        
+        # Extrai o diretório da versão selecionada
+        versao_selecionada = os.path.dirname(revit_path).lower()
+        print(f"[DEBUG] Versão selecionada: {versao_selecionada}")
+        
+        # Tenta usar PowerShell para obter o caminho exato do processo
+        revit_ja_aberto = False
+        mesma_versao = False
+        
+        try:
+            # PowerShell command para obter o caminho do executável
+            ps_command = 'Get-Process -Name Revit -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path'
+            ps_result = subprocess.run(
+                ['powershell', '-Command', ps_command],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            print(f"[DEBUG] PowerShell output raw: '{ps_result.stdout}'")
+            
+            if ps_result.stdout.strip():
+                for linha in ps_result.stdout.strip().split('\n'):
+                    linha = linha.strip()
+                    if linha and 'Revit.exe' in linha:
+                        revit_ja_aberto = True
+                        revit_aberto = os.path.dirname(linha).lower()
+                        print(f"[DEBUG] Revit.exe aberto em: {revit_aberto}")
+                        print(f"[DEBUG] Versão selecionada: {versao_selecionada}")
+                        print(f"[DEBUG] Comparação: '{revit_aberto}' == '{versao_selecionada}' = {revit_aberto == versao_selecionada}")
+                        
+                        # Verifica se é a MESMA versão
+                        if revit_aberto == versao_selecionada:
+                            print(f"[INFO] Mesma versão de Revit já está em execução")
+                            mesma_versao = True
+                        else:
+                            print(f"[INFO] Versão diferente encontrada, abrindo nova versão")
+                        break
+                        
+        except subprocess.TimeoutExpired:
+            print(f"[AVISO] Timeout ao executar PowerShell")
+        except Exception as e:
+            print(f"[AVISO] Erro ao executar PowerShell: {e}")
+        
+        # Se é a mesma versão, não reabre
+        if revit_ja_aberto and mesma_versao:
+            print(f"[RESULTADO] Não reabrindo - mesma versão")
+            return {'sucesso': True, 'ja_estava_aberto': True}
+        
+        # Abre o Revit em um processo separado (nova versão ou nenhuma aberta)
+        print(f"[INFO] Abrindo Revit: {revit_path}")
+        subprocess.Popen([revit_path])
+        print(f"[INFO] Revit aberto com sucesso")
+        
+        # Executa CLOVER em uma thread separada
+        thread_clover = threading.Thread(target=executar_clover_rvt_para_nwc, args=(revit_path,), daemon=True)
+        thread_clover.start()
+        
+        return {'sucesso': True, 'ja_estava_aberto': False}
+        
+    except Exception as e:
+        print(f"[ERRO] Erro ao abrir Revit: {e}")
+        import traceback
+        traceback.print_exc()
+        messagebox.showerror("Erro", f"Erro ao abrir Revit:\n{str(e)}")
+        return {'sucesso': False, 'ja_estava_aberto': False}
+
+
+# ==================== JANELA DE SELEÇÃO DE REVIT ====================
+
+class JanelaSelecaoRevit(tk.Toplevel):
+    """Janela para seleção de versão Revit"""
+    
+    def __init__(self, parent, versoes):
+        super().__init__(parent)
+        self.title("Selecionar Revit")
+        self.geometry("360x200")
+        self.resizable(False, False)
+        self.grab_set()
+        self.transient(parent)
+        self.configure(bg="#f2f2f2")
+        
+        self.versoes = versoes
+        self.revit_selecionado = None
+        
+        self._criar_interface()
+
+    def _criar_interface(self):
+        # Cabeçalho
+        ttk.Label(
+            self,
+            text="🔧 Selecionar Revit",
+            font=("Segoe UI", 10, "bold"),
+            background="#f2f2f2"
+        ).pack(pady=8, padx=10)
+        
+        # Instrução
+        ttk.Label(
+            self,
+            text="Qual versão deseja usar?",
+            font=("Segoe UI", 9),
+            background="#f2f2f2"
+        ).pack(pady=(0, 5))
+        
+        # Frame da lista
+        frame_lista = ttk.Frame(self)
+        frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
+        
+        scrollbar = ttk.Scrollbar(frame_lista)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.listbox = tk.Listbox(
+            frame_lista,
+            height=4,
+            yscrollcommand=scrollbar.set,
+            relief="groove",
+            borderwidth=1,
+            font=("Segoe UI", 9)
+        )
+        self.listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.listbox.yview)
+        
+        # Preenche a listbox
+        for nome_versao, _ in self.versoes:
+            self.listbox.insert("end", nome_versao)
+        
+        # Seleciona a primeira (mais recente) por padrão
+        if self.versoes:
+            self.listbox.selection_set(0)
+        
+        # Frame de botões
+        frame_botoes = ttk.Frame(self, padding="5")
+        frame_botoes.pack(pady=8, fill="x", padx=15)
+        
+        # Frame interno para centralizar os botões
+        buttons_inner = ttk.Frame(frame_botoes)
+        buttons_inner.pack(anchor="center")
+        
+        ttk.Button(
+            buttons_inner,
+            text="✓ Selecionar",
+            command=self._confirmar,
+            width=13
+        ).pack(side="left", padx=3)
+        
+        ttk.Button(
+            buttons_inner,
+            text="✗ Fechar",
+            command=self._fechar,
+            width=13
+        ).pack(side="left", padx=3)
+
+    def _confirmar(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Aviso", "Selecione uma versão de Revit")
+            return
+        
+        idx = sel[0]
+        self.revit_selecionado = self.versoes[idx]
+        self.destroy()
+
+    def _fechar(self):
+        self.revit_selecionado = None
+        self.destroy()
+
+
 # ==================== FUNÇÕES DE CONFIGURAÇÃO COM SESSÕES ====================
 
 def carregar_config():
@@ -69,7 +371,7 @@ def carregar_config():
                 'pastas': []
             }
         },
-        # Adiciona here a persistência das últimas extensões usadas.
+        # Adiciona aqui a persistência das últimas extensões usadas. 
         'ultimas_extensoes': {
             'entrada': 'rvt',
             'saida': 'ifc'
@@ -417,7 +719,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
 class MonitorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Monitor de Arquivos")
+        self.title("ATLAS")
         self.geometry("1080x720")
         self.resizable(False, False)
         self.configure(bg="#f2f2f2")
@@ -567,7 +869,7 @@ class MonitorApp(tk.Tk):
         else:
             self.filtro_lateral.pack(side="right", fill="y", padx=(10, 0))
             self._montar_conteudo_filtro()
-            self.filtro_visivel = True
+            self. filtro_visivel = True
 
     def _montar_conteudo_filtro(self):
         for widget in self.filtro_lateral.winfo_children():
@@ -611,11 +913,11 @@ class MonitorApp(tk.Tk):
                 else:
                     messagebox.showerror("Erro", f"Arquivo não encontrado:\n{path}")
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao abrir explorer:\n{str(e)}")
+                messagebox. showerror("Erro", f"Erro ao abrir explorer:\n{str(e)}")
 
-        self.log_box.tag_bind(tag_name, "<Button-1>", abrir_pasta)
+        self.log_box. tag_bind(tag_name, "<Button-1>", abrir_pasta)
         self.log_box.tag_bind(tag_name, "<Enter>", lambda e: self.log_box.config(cursor="hand2"))
-        self.log_box.tag_bind(tag_name, "<Leave>", lambda e: self.log_box.config(cursor=""))
+        self. log_box.tag_bind(tag_name, "<Leave>", lambda e: self.log_box.config(cursor=""))
 
         self.log_box.see("end")
         self.log_box.config(state="disabled")
@@ -635,7 +937,7 @@ class MonitorApp(tk.Tk):
             self.lista_pastas.insert("end", f"{p['caminho']} ({p['entrada']} → {p['saida']})")
     
     def _configurar_extensoes_pasta(self, caminho):
-        entrada_win = tk.Toplevel(self)
+        entrada_win = tk. Toplevel(self)
         entrada_win.title("Escolher Extensões")
         entrada_win.geometry("420x400")
         entrada_win.resizable(False, False)
@@ -766,7 +1068,7 @@ class MonitorApp(tk.Tk):
             atualizar_pastas_sessao(self.config, self.sessao_atual, self.pastas)
             salvar_config(self.config)
             self._atualizar_lista_gui()
-            self.log(f"📂 Pasta adicionada: {caminho} ({entrada_var.get()} → {saida_var.get()})")
+            self.log(f"📂 Pasta adicionada: {caminho} ({entrada_var.get()} → {saida_var. get()})")
             confirmado[0] = True
             entrada_win.destroy()
 
@@ -794,10 +1096,6 @@ class MonitorApp(tk.Tk):
         self.wait_window(entrada_win)
         return confirmado[0]
 
-# 👇 daqui pra baixo começa outro bloco, sem identação!
-
-
-
     def _remover_pastas(self):
         selecoes = self.lista_pastas.curselection()
         if not selecoes:
@@ -805,7 +1103,7 @@ class MonitorApp(tk.Tk):
             return
 
         qtd = len(selecoes)
-        if not messagebox.askyesno("Confirmar", f"Remover {qtd} pasta(s) selecionada(s)?"):
+        if not messagebox.askyesno("Confirmar", f"Remover {qtd} pasta(s) selecionada(s)? "):
             return
 
         for idx in sorted(selecoes, reverse=True):
@@ -827,7 +1125,7 @@ class MonitorApp(tk.Tk):
         self._render_resultados_filtrados(self.resultados, filtros)
 
     def _limpar_filtros(self):
-        self.filter_novos.set(True)
+        self.filter_novos. set(True)
         self.filter_desatualizados.set(True)
         self.filter_atualizados.set(True)
         self._aplicar_filtros()
@@ -843,7 +1141,7 @@ class MonitorApp(tk.Tk):
         self.log(f"Pastas monitoradas: {len(self.pastas)}\n")
 
         if not resultados:
-            self.log("Nenhum resultado disponível. Execute 'Verificar Atualizações' primeiro.")
+            self.log("Nenhum resultado disponível.  Execute 'Verificar Atualizações' primeiro.")
             self.log("=" * 90)
             return
 
@@ -937,6 +1235,7 @@ class MonitorApp(tk.Tk):
             self.log(f"Data/Hora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
             self.log(f"Pastas monitoradas: {len(self.pastas)}\n")
 
+            # Executa verificação de atualizações
             self.resultados = verificar_atualizacoes(self.pastas)
 
             total_novos = sum(len(r['novos']) for r in self.resultados.values())
@@ -996,26 +1295,146 @@ class MonitorApp(tk.Tk):
             self.log("✓ VERIFICAÇÃO CONCLUÍDA")
             self.log("=" * 90)
 
-            resposta = messagebox.askyesno(
-                "Verificação Concluída",
-                f"🆕 Novos: {total_novos}\n⚠️ Desatualizados: {total_desatualizados}\n✅ Atualizados: {total_atualizados}\n\n"
-                "Deseja gerar o relatório de arquivos agora?"
-            )
-
-            if resposta:
+            # Dialog personalizado com 3 botões
+            dialog = tk.Toplevel(self)
+            dialog.title("Verificação Concluída")
+            dialog.geometry("280x160")
+            dialog.resizable(False, False)
+            dialog.grab_set()
+            dialog.transient(self)
+            dialog.configure(bg="#f2f2f2")
+            
+            # Ícone/Header
+            header_frame = ttk.Frame(dialog)
+            header_frame.pack(pady=5, padx=15)
+            
+            ttk.Label(
+                header_frame,
+                text="✓ Verificação Concluída",
+                font=("Segoe UI", 10, "bold"),
+                background="#f2f2f2"
+            ).pack(anchor="w")
+            
+            # Informações
+            info_frame = ttk.Frame(dialog)
+            info_frame.pack(pady=(0, 5), padx=15, fill="both", expand=True)
+            
+            ttk.Label(
+                info_frame,
+                text="Resultados da Verificação:",
+                font=("Segoe UI", 8),
+                background="#f2f2f2"
+            ).pack(anchor="center", pady=(0, 2))
+            
+            ttk.Label(
+                info_frame,
+                text=f"🆕 Novos: {total_novos}",
+                font=("Segoe UI", 9),
+                background="#f2f2f2"
+            ).pack(anchor="center", pady=0)
+            
+            ttk.Label(
+                info_frame,
+                text=f"⚠️ Desatualizados: {total_desatualizados}",
+                font=("Segoe UI", 9),
+                background="#f2f2f2"
+            ).pack(anchor="center", pady=0)
+            
+            ttk.Label(
+                info_frame,
+                text=f"✅ Atualizados: {total_atualizados}",
+                font=("Segoe UI", 9),
+                background="#f2f2f2"
+            ).pack(anchor="center", pady=0)
+            
+            # Frame de botões
+            button_frame = ttk.Frame(dialog)
+            button_frame.pack(pady=5, fill="x", padx=15)
+            
+            # Frame interno para centralizar os botões
+            buttons_inner = ttk.Frame(button_frame)
+            buttons_inner.pack(anchor="center")
+            
+            def atualizar():
+                dialog.destroy()
+                
+                # Detecta versões Revit disponíveis
+                versoes_revit = detectar_versoes_revit()
+                
+                if not versoes_revit:
+                    self.log("\n❌ ERRO: Nenhuma versão de Revit foi detectada no sistema.")
+                    self.log("\nVerifique se o Revit está instalado em:")
+                    self.log(f"   {os.path.join(os.environ.get('ProgramFiles', 'C:\\Program Files'), 'Autodesk')}")
+                    messagebox.showerror("Revit Não Encontrado", "Nenhuma versão de Revit foi detectada no sistema.")
+                    return
+                
+                # Abre dialog de seleção de Revit
+                janela_revit = JanelaSelecaoRevit(self, versoes_revit)
+                self.wait_window(janela_revit)
+                
+                if not janela_revit.revit_selecionado:
+                    self.log("\n⚠️ Operação cancelada. Nenhuma versão de Revit foi selecionada.")
+                    return
+                
+                nome_revit, caminho_revit = janela_revit.revit_selecionado
+                
+                self.log(f"\n" + "=" * 90)
+                self.log(f"Revit Selecionado: {nome_revit}")
+                self.log("=" * 90)
+                
+                # Abre Revit
+                self.log(f"🚀 Abrindo {nome_revit}...")
+                resultado_abertura = abrir_revit(caminho_revit)
+                
+                if resultado_abertura['sucesso']:
+                    if resultado_abertura['ja_estava_aberto']:
+                        self.log(f"⚠️  {nome_revit} já estava aberto! Usando a instância existente...")
+                    else:
+                        self.log(f"✓ {nome_revit} aberto com sucesso!")
+                else:
+                    self.log(f"❌ Erro ao abrir {nome_revit}")
+            
+            def gerar_relatorio():
+                dialog.destroy()
                 destino = set.gerar_set(self.resultados)
                 if destino:
                     self.log(f"\n📄 Lista de arquivos salva em: {destino}")
                     messagebox.showinfo("Relatório Gerado", f"Relatório salvo em:\n{destino}")
+            
+            def fechar():
+                dialog.destroy()
+            
+            ttk.Button(
+                buttons_inner,
+                text="Atualizar",
+                command=atualizar,
+                width=11
+            ).pack(side="left", padx=2)
+            
+            ttk.Button(
+                buttons_inner,
+                text="Gerar set",
+                command=gerar_relatorio,
+                width=11
+            ).pack(side="left", padx=2)
+            
+            ttk.Button(
+                buttons_inner,
+                text="Fechar",
+                command=fechar,
+                width=11
+            ).pack(side="left", padx=2)
+            
+            self.wait_window(dialog)
 
         self.rodar_em_thread(tarefa)
 
     # ------------------------- ADICIONAR PASTAS (MULTI) ------------------------- #
     def _adicionar_pastas(self):
         """
-        Abre a janela de seleção múltipla. Para cada pasta confirmada,
+        Abre a janela de seleção múltipla.  Para cada pasta confirmada,
         abre o diálogo de escolha de extensões usando como padrão as
-        últimas escolhas (persistidas em config).
+        últimas escolhas (persistidas em config). 
         """
         janela = JanelaSelecaoPastas(self)
         self.wait_window(janela)
