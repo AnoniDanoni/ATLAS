@@ -34,7 +34,7 @@ def tela_carregamento(titulo="Carregando", mensagem="Por favor, aguarde...", dur
             parent=root
         )
     """
-    
+    time.sleep(10)
     # Cria a janela
     janela = tk.Toplevel(parent) if parent else tk.Toplevel()
     janela.title(titulo)
