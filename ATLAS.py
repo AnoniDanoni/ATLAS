@@ -9,7 +9,8 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
-import set  
+import set
+from loading_screen import tela_carregamento  
 
 # ==================== CONFIGURAÇÃO DE DIRETÓRIO ====================
 
@@ -236,8 +237,8 @@ def abrir_revit(revit_path):
         print(f"[INFO] Revit aberto com sucesso")
         
         # Executa CLOVER em uma thread separada
-        thread_clover = threading.Thread(target=executar_clover_rvt_para_nwc, args=(revit_path,), daemon=True)
-        thread_clover.start()
+        # thread_clover = threading.Thread(target=executar_clover_rvt_para_nwc, args=(revit_path,), daemon=True)
+        # thread_clover.start()
         
         return {'sucesso': True, 'ja_estava_aberto': False}
         
@@ -1401,6 +1402,15 @@ class MonitorApp(tk.Tk):
                 
                 # Abre Revit
                 self.log(f"🚀 Abrindo {nome_revit}...")
+                
+                # Mostra tela de carregamento
+                tela = tela_carregamento(
+                    titulo="Carregando Revit",
+                    mensagem=f"Abrindo {nome_revit}...",
+                    duracao=60,
+                    parent=self
+                )
+                
                 resultado_abertura = abrir_revit(caminho_revit)
                 
                 if resultado_abertura['sucesso']:
