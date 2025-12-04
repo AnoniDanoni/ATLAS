@@ -1358,6 +1358,23 @@ class MonitorApp(tk.Tk):
             def atualizar():
                 dialog.destroy()
                 
+                # Gera temp_set.txt com os arquivos novos e desatualizados
+                # E também gera command_temp.txt baseado no formato dominante
+                self.log("\n📝 Gerando temp_set.txt e analisando formatos...")
+                temp_file, command_file = set.gerar_temp_set(self.resultados)
+                
+                if temp_file:
+                    self.log(f"✓ temp_set.txt criado em: {temp_file}")
+                else:
+                    self.log("⚠️  Nenhum arquivo para atualizar (temp_set.txt não foi criado)")
+                    messagebox.showwarning("Aviso", "Nenhum arquivo novo ou desatualizado para processar.")
+                    return
+                
+                if command_file:
+                    self.log(f"✓ command_temp.txt criado em: {command_file}")
+                else:
+                    self.log("⚠️  Nenhum comando foi definido para o formato dominante.")
+                
                 # Detecta versões Revit disponíveis
                 versoes_revit = detectar_versoes_revit()
                 
