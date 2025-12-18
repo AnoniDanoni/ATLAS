@@ -9,7 +9,7 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
-import set
+import set as set_module  # Renomeado para evitar conflito com o tipo set nativo
 from loading_screen import tela_carregamento  
 
 # ==================== CONFIGURAÇÃO DE DIRETÓRIO ====================
@@ -358,6 +358,12 @@ def carregar_config():
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 print(f"[INFO] Configuração carregada de: {CONFIG_FILE}")
+                
+                # Migração: adiciona arquivos_ignorados se não existir
+                if 'arquivos_ignorados' not in config:
+                    config['arquivos_ignorados'] = {}
+                    print(f"[INFO] Estrutura 'arquivos_ignorados' adicionada")
+                
                 return config
         except Exception as e:
             print(f"[ERRO] Erro ao carregar config: {e}")
@@ -376,7 +382,9 @@ def carregar_config():
         'ultimas_extensoes': {
             'entrada': 'rvt',
             'saida': 'ifc'
-        }
+        },
+        # Arquivos ignorados por pasta (caminho_pasta -> lista de nomes de arquivos)
+        'arquivos_ignorados': {}
     }
 
 
@@ -717,6 +725,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
 
 # ==================== INTERFACE PRINCIPAL ====================
 
+
 class MonitorApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -810,6 +819,8 @@ class MonitorApp(tk.Tk):
         frame_filtro_relatorio = ttk.Frame(self.content_frame)
         frame_filtro_relatorio.pack(fill="x", padx=20, pady=(0,5), anchor="e")
         ttk.Button(frame_filtro_relatorio, text="🎛 Filtros", width=15, command=self._alternar_filtro_lateral).pack(side="right")
+        ttk.Button(frame_filtro_relatorio, text="🔄 Reverter Ignorados", width=18, command=self._reverter_ignorados).pack(side="right", padx=(0, 5))
+        ttk.Button(frame_filtro_relatorio, text="🚫 Ignorar Arquivos", width=18, command=self._ignorar_arquivos).pack(side="right", padx=(0, 5))
 
         # Log
         frame_log = ttk.Frame(self.content_frame, padding=10)
@@ -1131,6 +1142,162 @@ class MonitorApp(tk.Tk):
         self.filter_atualizados.set(True)
         self._aplicar_filtros()
 
+    def _ignorar_arquivos(self):
+        """Permite selecionar arquivos para ignorar da pasta selecionada"""
+        try:
+            selecionadas = self.lista_pastas.curselection()
+            
+            if not selecionadas:
+                messagebox.showwarning("Aviso", "Selecione uma pasta monitorada")
+                return
+            
+            if len(selecionadas) > 1:
+                messagebox.showwarning("Aviso", "Selecione apenas uma pasta por vez")
+                return
+            
+            # Pega o caminho da pasta selecionada
+            idx = selecionadas[0]
+            pasta_info = self.pastas[idx]
+            caminho_pasta = pasta_info['caminho']
+            
+            # Abre diálogo de seleção de arquivos
+            from tkinter import filedialog
+            
+            arquivos_selecionados = filedialog.askopenfilenames(
+                title="Selecione arquivos para ignorar",
+                initialdir=caminho_pasta,
+                filetypes=[
+                    ("Arquivos suportados", "*.rvt *.dwg *.ifc *.nwc"),
+                    ("Revit", "*.rvt"),
+                    ("AutoCAD", "*.dwg"),
+                    ("IFC", "*.ifc"),
+                    ("Navisworks", "*.nwc"),
+                    ("Todos", "*.*")
+                ]
+            )
+            
+            if not arquivos_selecionados:
+                return
+            
+            # Inicializa estrutura se não existir
+            if 'arquivos_ignorados' not in self.config:
+                self.config['arquivos_ignorados'] = {}
+            
+            if caminho_pasta not in self.config['arquivos_ignorados']:
+                self.config['arquivos_ignorados'][caminho_pasta] = []
+            
+            # Extrai apenas os nomes dos arquivos
+            ignorados = set(self.config['arquivos_ignorados'][caminho_pasta])
+            adicionados = 0
+            
+            for caminho_arquivo in arquivos_selecionados:
+                nome_arquivo = os.path.basename(caminho_arquivo)
+                if nome_arquivo not in ignorados:
+                    ignorados.add(nome_arquivo)
+                    adicionados += 1
+            
+            # Salva configuração
+            self.config['arquivos_ignorados'][caminho_pasta] = list(ignorados)
+            salvar_config(self.config)
+            
+            if adicionados > 0:
+                messagebox.showinfo("Sucesso", f"{adicionados} arquivo(s) adicionado(s) à lista de ignorados")
+            else:
+                messagebox.showinfo("Info", "Arquivo(s) já estavam na lista de ignorados")
+        
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro:\n{str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def _reverter_ignorados(self):
+        """Remove todos os arquivos ignorados da pasta selecionada"""
+        try:
+            selecionadas = self.lista_pastas.curselection()
+            
+            if not selecionadas:
+                messagebox.showwarning("Aviso", "Selecione uma pasta monitorada")
+                return
+            
+            # Pega o caminho da pasta selecionada
+            idx = selecionadas[0]
+            pasta_info = self.pastas[idx]
+            caminho_pasta = pasta_info['caminho']
+            
+            # Verifica se há ignorados
+            if 'arquivos_ignorados' not in self.config or caminho_pasta not in self.config['arquivos_ignorados']:
+                messagebox.showinfo("Info", "Nenhum arquivo ignorado nesta pasta")
+                return
+            
+            ignorados = self.config['arquivos_ignorados'][caminho_pasta]
+            if not ignorados:
+                messagebox.showinfo("Info", "Nenhum arquivo ignorado nesta pasta")
+                return
+            
+            # Confirma remoção
+            qtd = len(ignorados)
+            if not messagebox.askyesno("Confirmar", f"Remover {qtd} arquivo(s) da lista de ignorados?\n\n{chr(10).join(ignorados[:5])}{'...' if qtd > 5 else ''}"):
+                return
+            
+            # Remove ignorados
+            self.config['arquivos_ignorados'][caminho_pasta] = []
+            salvar_config(self.config)
+            messagebox.showinfo("Sucesso", f"{qtd} arquivo(s) removido(s) da lista de ignorados")
+        
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro:\n{str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def _filtrar_ignorados(self, resultados):
+        """Filtra resultados removendo arquivos ignorados"""
+        if 'arquivos_ignorados' not in self.config:
+            return resultados
+        
+        resultados_filtrados = {}
+        for caminho_pasta, resultado in resultados.items():
+            ignorados = set(self.config['arquivos_ignorados'].get(caminho_pasta, []))
+            
+            # Filtra cada categoria
+            novos = [r for r in resultado['novos'] if not self._arquivo_esta_ignorado(r, ignorados)]
+            desatualizados = [r for r in resultado['desatualizados'] if not self._arquivo_esta_ignorado(r, ignorados)]
+            atualizados = [r for r in resultado['atualizados'] if not self._arquivo_esta_ignorado(r, ignorados)]
+            
+            resultados_filtrados[caminho_pasta] = {
+                'config': resultado['config'],
+                'novos': novos,
+                'desatualizados': desatualizados,
+                'atualizados': atualizados,
+                'total_entrada': resultado['total_entrada'],
+                'total_saida': resultado['total_saida']
+            }
+        
+        return resultados_filtrados
+
+    def _arquivo_esta_ignorado(self, arquivo_info, ignorados):
+        """Verifica se um arquivo está na lista de ignorados"""
+        nome_base = arquivo_info.get('nome_base', '')
+        
+        # Verifica nome_base direto
+        if nome_base in ignorados:
+            return True
+        
+        # Verifica arquivo de entrada
+        info_entrada = arquivo_info.get('entrada', {})
+        if info_entrada:
+            arquivo_entrada = info_entrada.get('arquivo', '')
+            if arquivo_entrada in ignorados:
+                return True
+        
+        # Verifica se algum ignorado começa com o mesmo nome base
+        nome_sem_ext = nome_base.rsplit('.', 1)[0] if '.' in nome_base else nome_base
+        for ignorado in ignorados:
+            ignorado_sem_ext = ignorado.rsplit('.', 1)[0] if '.' in ignorado else ignorado
+            if nome_sem_ext == ignorado_sem_ext:
+                return True
+        
+        return False
+
     def _render_resultados_filtrados(self, resultados, filtros):
         self.limpar_log()
 
@@ -1238,6 +1405,9 @@ class MonitorApp(tk.Tk):
 
             # Executa verificação de atualizações
             self.resultados = verificar_atualizacoes(self.pastas)
+            
+            # Filtra arquivos ignorados
+            self.resultados = self._filtrar_ignorados(self.resultados)
 
             total_novos = sum(len(r['novos']) for r in self.resultados.values())
             total_desatualizados = sum(len(r['desatualizados']) for r in self.resultados.values())
@@ -1362,7 +1532,7 @@ class MonitorApp(tk.Tk):
                 # Gera temp_set.txt com os arquivos novos e desatualizados
                 # E também gera command_temp.txt baseado no formato dominante
                 self.log("\n📝 Gerando temp_set.txt e analisando formatos...")
-                temp_file, command_file = set.gerar_temp_set(self.resultados)
+                temp_file, command_file = set_module.gerar_temp_set(self.resultados)
                 
                 if temp_file:
                     self.log(f"✓ temp_set.txt criado em: {temp_file}")
