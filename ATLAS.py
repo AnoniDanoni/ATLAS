@@ -748,6 +748,9 @@ class MonitorApp(tk.Tk):
         self.filter_novos = tk.BooleanVar(value=True)
         self.filter_desatualizados = tk.BooleanVar(value=True)
         self.filter_atualizados = tk.BooleanVar(value=True)
+        
+        # Flag para controlar se estamos visualizando ignorados
+        self.visualizando_ignorados = False
 
         self._montar_interface()
         self._atualizar_lista_gui()
@@ -778,7 +781,6 @@ class MonitorApp(tk.Tk):
         self._atualizar_combo_sessoes()
         
         ttk.Button(frame_sessao, text="⚙️ Gerenciar Sessões", command=self._gerenciar_sessoes, width=20).pack(side="left", padx=5)
-
         # Botões principais
         frame_botoes = ttk.Frame(self)
         frame_botoes.pack(pady=10)
@@ -818,6 +820,8 @@ class MonitorApp(tk.Tk):
         # Frame do botão de filtro
         frame_filtro_relatorio = ttk.Frame(self.content_frame)
         frame_filtro_relatorio.pack(fill="x", padx=20, pady=(0,5), anchor="e")
+        self.btn_ignorados = ttk.Button(frame_filtro_relatorio, text="📋 Ignorados", width=15, command=self._mostrar_ignorados)
+        self.btn_ignorados.pack(side="left")
         ttk.Button(frame_filtro_relatorio, text="🎛 Filtros", width=15, command=self._alternar_filtro_lateral).pack(side="right")
         ttk.Button(frame_filtro_relatorio, text="🔄 Reverter Ignorados", width=18, command=self._reverter_ignorados).pack(side="right", padx=(0, 5))
         ttk.Button(frame_filtro_relatorio, text="🚫 Ignorar Arquivos", width=18, command=self._ignorar_arquivos).pack(side="right", padx=(0, 5))
@@ -1249,6 +1253,65 @@ class MonitorApp(tk.Tk):
             import traceback
             traceback.print_exc()
 
+    def _mostrar_ignorados(self):
+        """Mostra a lista de arquivos ignorados no log ou volta ao log de resultados"""
+        try:
+            # Se já está visualizando ignorados, volta ao log de resultados
+            if self.visualizando_ignorados:
+                self.visualizando_ignorados = False
+                self.btn_ignorados.config(text="📋 Ignorados")
+                # Volta ao log de resultados se houver
+                if self.resultados:
+                    filtros = {
+                        'novos': self.filter_novos.get(),
+                        'desatualizados': self.filter_desatualizados.get(),
+                        'atualizados': self.filter_atualizados.get()
+                    }
+                    self._render_resultados_filtrados(self.resultados, filtros)
+                else:
+                    self.limpar_log()
+                    self.log("ℹ️  Execute 'Verificar Atualizações' primeiro para ver resultados")
+                return
+            
+            # Marca que estamos visualizando ignorados
+            self.visualizando_ignorados = True
+            self.btn_ignorados.config(text="📋 Relatório")
+            
+            # Limpa o log
+            self.limpar_log()
+            
+            # Verifica se há arquivos ignorados
+            if 'arquivos_ignorados' not in self.config or not self.config['arquivos_ignorados']:
+                self.log("ℹ️  Nenhum arquivo ignorado registrado")
+                return
+            
+            self.log("=" * 80)
+            self.log("📋 LISTA DE ARQUIVOS IGNORADOS")
+            self.log("=" * 80)
+            
+            total_ignorados = 0
+            
+            # Itera sobre todas as pastas
+            for caminho_pasta, arquivos in self.config['arquivos_ignorados'].items():
+                if arquivos:
+                    self.log(f"\n📁 Pasta: {caminho_pasta}")
+                    self.log("-" * 80)
+                    
+                    for i, arquivo in enumerate(arquivos, 1):
+                        self.log(f"  {i:3d}. {arquivo}")
+                    
+                    self.log(f"\n  Subtotal: {len(arquivos)} arquivo(s) ignorado(s)\n")
+                    total_ignorados += len(arquivos)
+            
+            self.log("=" * 80)
+            self.log(f"✓ Total de arquivos ignorados: {total_ignorados}")
+            self.log("=" * 80)
+        
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exibir ignorados:\n{str(e)}")
+            import traceback
+            traceback.print_exc()
+
     def _filtrar_ignorados(self, resultados):
         """Filtra resultados removendo arquivos ignorados"""
         if 'arquivos_ignorados' not in self.config:
@@ -1395,6 +1458,10 @@ class MonitorApp(tk.Tk):
             return
 
         def tarefa():
+            # Reset da flag de visualização de ignorados
+            self.visualizando_ignorados = False
+            self.btn_ignorados.config(text="📋 Ignorados")
+            
             self.limpar_log()
             self.log("=" * 90)
             self.log("🔍 VERIFICAÇÃO DE ATUALIZAÇÕES INICIADA")
