@@ -561,7 +561,7 @@ class JanelaSelecaoPastas(tk.Toplevel):
 # ==================== JANELA DE GERENCIAMENTO DE SESSÕES ====================
 
 class JanelaGerenciarSessoes(tk.Toplevel):
-    def __init__(self, parent, config):
+    def __init__(self, parent, config, bg_principal="#36393F", bg_secundario="#2F3136", fg_texto="#FFFFFF", fg_texto_secundario="#B9BBBE"):
         super().__init__(parent)
         self.title("Gerenciar Sessões")
         self.geometry("500x450")
@@ -573,38 +573,55 @@ class JanelaGerenciarSessoes(tk.Toplevel):
         self.config = config
         self.sessao_modificada = False
         
+        # Cores do tema
+        self.bg_principal = bg_principal
+        self.bg_secundario = bg_secundario
+        self.bg_terciario = "#282B30"
+        self.fg_texto = fg_texto
+        self.fg_texto_secundario = fg_texto_secundario
+        self.cor_acento = "#5865F2"
+        
+        self.configure(bg=self.bg_principal)
+        
         self._criar_interface()
         self._atualizar_lista()
 
     def _criar_interface(self):
-        ttk.Label(self, text="📋 Sessões Configuradas", font=("Segoe UI", 12, "bold")).pack(pady=10)
+        # Cabeçalho
+        header_frame = tk.Frame(self, bg=self.bg_secundario)
+        header_frame.pack(fill="x", pady=(0, 10))
         
-        # Frame da lista
-        frame_lista = ttk.Frame(self)
-        frame_lista.pack(fill="both", expand=True, padx=10, pady=10)
+        ttk.Label(header_frame, text="📋 Sessões Configuradas", font=("Segoe UI", 12, "bold"), background=self.bg_secundario, foreground=self.cor_acento).pack(pady=10)
+        
+        # Frame da lista com borda
+        frame_lista_border = tk.Frame(self, bg=self.cor_acento)
+        frame_lista_border.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        frame_lista = tk.Frame(frame_lista_border, bg=self.bg_principal)
+        frame_lista.pack(fill="both", expand=True, padx=2, pady=2)
         
         scrollbar = ttk.Scrollbar(frame_lista)
         scrollbar.pack(side="right", fill="y")
         
         self.listbox = tk.Listbox(frame_lista, height=12, yscrollcommand=scrollbar.set, 
-                                   relief="groove", borderwidth=2)
+                                   relief="flat", borderwidth=0, bg=self.bg_terciario, fg=self.fg_texto,
+                                   selectbackground=self.cor_acento, selectforeground="#ffffff", font=("Segoe UI", 9))
         self.listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.listbox.yview)
         
         # Frame de botões
-        frame_botoes = ttk.Frame(self)
+        frame_botoes = tk.Frame(self, bg=self.bg_principal)
         frame_botoes.pack(pady=10)
         
-        ttk.Button(frame_botoes, text="➕ Nova Sessão", command=self._nova_sessao, width=18).grid(row=0, column=0, padx=5, pady=3)
-        ttk.Button(frame_botoes, text="✏️ Renomear", command=self._renomear_sessao, width=18).grid(row=0, column=1, padx=5, pady=3)
-        ttk.Button(frame_botoes, text="📋 Duplicar", command=self._duplicar_sessao, width=18).grid(row=1, column=0, padx=5, pady=3)
-        ttk.Button(frame_botoes, text="🗑 Excluir", command=self._excluir_sessao, width=18).grid(row=1, column=1, padx=5, pady=3)
-        ttk.Button(frame_botoes, text="✓ Fechar", command=self._fechar, width=37).grid(row=2, column=0, columnspan=2, padx=5, pady=10)
+        ttk.Button(frame_botoes, text="➕ Nova Sessão", command=self._nova_sessao, width=18).grid(row=0, column=0, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="✏️ Renomear", command=self._renomear_sessao, width=18).grid(row=0, column=1, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="📋 Duplicar", command=self._duplicar_sessao, width=18).grid(row=1, column=0, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="🗑 Excluir", command=self._excluir_sessao, width=18).grid(row=1, column=1, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="✓ Fechar", command=self._fechar, width=37).grid(row=2, column=0, columnspan=2, padx=4, pady=10)
 
     def _atualizar_lista(self):
         self.listbox.delete(0, "end")
         sessao_ativa = self.config['sessao_ativa']
-        
         for nome_sessao in sorted(self.config['sessoes'].keys()):
             qtd_pastas = len(self.config['sessoes'][nome_sessao]['pastas'])
             marcador = "★" if nome_sessao == sessao_ativa else "  "
@@ -732,7 +749,22 @@ class MonitorApp(tk.Tk):
         self.title("ATLAS")
         self.geometry("1080x720")
         self.resizable(False, False)
-        self.configure(bg="#f2f2f2")
+        
+        # Tema Discord (Cinza Discord com roxo acentuado)
+        self.bg_principal = "#36393F"
+        self.bg_secundario = "#2F3136"
+        self.bg_terciario = "#282B30"
+        self.fg_texto = "#FFFFFF"
+        self.fg_texto_secundario = "#B9BBBE"
+        self.cor_acento = "#5865F2"
+        self.cor_sucesso = "#43B581"
+        self.cor_alerta = "#FAA61A"
+        self.cor_erro = "#F04747"
+        
+        self.configure(bg=self.bg_principal)
+        
+        # Configurar tema ttk
+        self._configurar_estilo_ttk()
 
         # Carrega configuração completa
         self.config = carregar_config()
@@ -758,22 +790,49 @@ class MonitorApp(tk.Tk):
         # Mostra informação sobre o diretório Atlas ao iniciar
         self.log(f"📁 Configurações salvas em: {DIRETORIO_ATLAS}")
         self.log(f"📄 Arquivo: {os.path.basename(CONFIG_FILE)}\n")
+    
+    def _configurar_estilo_ttk(self):
+        """Configura o estilo visual dos widgets ttk"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Fundo e texto padrão
+        style.configure('TLabel', background=self.bg_principal, foreground=self.fg_texto)
+        style.configure('TFrame', background=self.bg_principal)
+        style.configure('TButton', background=self.bg_terciario, foreground=self.fg_texto, 
+                       borderwidth=1, focuscolor='none', padding=6)
+        style.map('TButton', 
+                 background=[('active', self.cor_acento), ('pressed', self.cor_acento)],
+                 foreground=[('active', '#ffffff'), ('pressed', '#ffffff')])
+        
+        # Combobox
+        style.configure('TCombobox', fieldbackground=self.bg_terciario, background=self.bg_terciario,
+                       foreground=self.fg_texto)
+        
+        # Checkbutton
+        style.configure('TCheckbutton', background=self.bg_principal, foreground=self.fg_texto)
+        style.map('TCheckbutton', background=[('active', self.bg_principal)])
 
     # ------------------------- INTERFACE ------------------------- #
     def _montar_interface(self):
-        # Cabeçalho
+        # Cabeçalho com fundo destaque
+        header_frame = tk.Frame(self, bg=self.bg_secundario, height=60)
+        header_frame.pack(fill="x", pady=(0, 10))
+        header_frame.pack_propagate(False)
+        
         ttk.Label(
-            self,
+            header_frame,
             text="🔄 Monitor de Atualizações de Arquivos",
             font=("Segoe UI", 16, "bold"),
-            background="#f2f2f2",
-        ).pack(pady=15)
+            background=self.bg_secundario,
+            foreground=self.cor_acento,
+        ).pack(pady=12)
 
         # Frame de sessão
-        frame_sessao = ttk.Frame(self)
-        frame_sessao.pack(pady=5)
+        frame_sessao = tk.Frame(self, bg=self.bg_principal)
+        frame_sessao.pack(pady=8)
         
-        ttk.Label(frame_sessao, text="Sessão Ativa:", font=("Segoe UI", 10), background="#f2f2f2").pack(side="left", padx=5)
+        ttk.Label(frame_sessao, text="Sessão Ativa:", font=("Segoe UI", 10, "bold"), background=self.bg_principal, foreground=self.fg_texto).pack(side="left", padx=5)
         
         self.combo_sessoes = ttk.Combobox(frame_sessao, width=30, state="readonly")
         self.combo_sessoes.pack(side="left", padx=5)
@@ -781,54 +840,60 @@ class MonitorApp(tk.Tk):
         self._atualizar_combo_sessoes()
         
         ttk.Button(frame_sessao, text="⚙️ Gerenciar Sessões", command=self._gerenciar_sessoes, width=20).pack(side="left", padx=5)
-        # Botões principais
-        frame_botoes = ttk.Frame(self)
-        frame_botoes.pack(pady=10)
+        
+        # Botões principais com frame destacado
+        frame_botoes = tk.Frame(self, bg=self.bg_principal)
+        frame_botoes.pack(pady=8)
 
         ttk.Button(
             frame_botoes, text="📂 Adicionar Pasta(s)", width=25, command=self._adicionar_pastas
-        ).grid(row=0, column=0, padx=10, pady=5)
+        ).grid(row=0, column=0, padx=8, pady=4)
         ttk.Button(
             frame_botoes, text="🗑 Remover Selecionada(s)", width=25, command=self._remover_pastas
-        ).grid(row=0, column=1, padx=10, pady=5)
+        ).grid(row=0, column=1, padx=8, pady=4)
         ttk.Button(
             frame_botoes, text="🔍 Verificar Atualizações", width=25, command=self._verificar_atualizacoes
-        ).grid(row=1, column=0, padx=10, pady=5)
+        ).grid(row=1, column=0, padx=8, pady=4)
         ttk.Button(
             frame_botoes, text="❌ Fechar", width=25, command=self.destroy
-        ).grid(row=1, column=1, padx=10, pady=5)
+        ).grid(row=1, column=1, padx=8, pady=4)
 
-        # Lista de pastas
+        # Lista de pastas com borda melhorada
         ttk.Label(
-            self, text="Pastas Monitoradas:", font=("Segoe UI", 11, "bold"), background="#f2f2f2"
-        ).pack(anchor="w", padx=20)
+            self, text="Pastas Monitoradas:", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.fg_texto
+        ).pack(anchor="w", padx=20, pady=(10, 3))
 
+        # Frame para listbox com borda (roxo muito desbotado)
+        frame_lista = tk.Frame(self, bg="#3D3F5C", highlightthickness=0)
+        frame_lista.pack(padx=20, pady=(0, 12), fill="both")
+        
         self.lista_pastas = tk.Listbox(
-            self, height=6, width=110, relief="groove", borderwidth=2, bg="#fafafa",
-            selectmode=tk.EXTENDED
+            frame_lista, height=5, width=110, relief="flat", borderwidth=0, bg=self.bg_terciario,
+            selectmode=tk.EXTENDED, fg=self.fg_texto, selectbackground=self.cor_acento,
+            selectforeground="#ffffff", font=("Segoe UI", 9)
         )
-        self.lista_pastas.pack(padx=20, pady=(0, 15))
+        self.lista_pastas.pack(padx=2, pady=2, fill="both", expand=True)
 
         ttk.Label(
-            self, text="Relatório:", font=("Segoe UI", 11, "bold"), background="#f2f2f2"
-        ).pack(anchor="w", padx=10)
+            self, text="Relatório:", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.fg_texto
+        ).pack(anchor="w", padx=20, pady=(5, 3))
 
         # Container principal
-        self.content_frame = ttk.Frame(self)
+        self.content_frame = tk.Frame(self, bg=self.bg_principal)
         self.content_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
 
         # Frame do botão de filtro
-        frame_filtro_relatorio = ttk.Frame(self.content_frame)
-        frame_filtro_relatorio.pack(fill="x", padx=20, pady=(0,5), anchor="e")
+        frame_filtro_relatorio = tk.Frame(self.content_frame, bg=self.bg_principal)
+        frame_filtro_relatorio.pack(fill="x", padx=0, pady=(0, 8))
         self.btn_ignorados = ttk.Button(frame_filtro_relatorio, text="📋 Ignorados", width=15, command=self._mostrar_ignorados)
-        self.btn_ignorados.pack(side="left")
-        ttk.Button(frame_filtro_relatorio, text="🎛 Filtros", width=15, command=self._alternar_filtro_lateral).pack(side="right")
-        ttk.Button(frame_filtro_relatorio, text="🔄 Reverter Ignorados", width=18, command=self._reverter_ignorados).pack(side="right", padx=(0, 5))
-        ttk.Button(frame_filtro_relatorio, text="🚫 Ignorar Arquivos", width=18, command=self._ignorar_arquivos).pack(side="right", padx=(0, 5))
+        self.btn_ignorados.pack(side="left", padx=2)
+        ttk.Button(frame_filtro_relatorio, text="🎛 Filtros", width=15, command=self._alternar_filtro_lateral).pack(side="right", padx=2)
+        ttk.Button(frame_filtro_relatorio, text="🔄 Reverter Ignorados", width=18, command=self._reverter_ignorados).pack(side="right", padx=2)
+        ttk.Button(frame_filtro_relatorio, text="🚫 Ignorar Arquivos", width=18, command=self._ignorar_arquivos).pack(side="right", padx=2)
 
-        # Log
-        frame_log = ttk.Frame(self.content_frame, padding=10)
-        frame_log.pack(side="left", fill="both", expand=True)
+        # Log com borda (roxo muito desbotado)
+        frame_log = tk.Frame(self.content_frame, bg="#5A5E93", highlightthickness=0)
+        frame_log.pack(side="left", fill="both", expand=True, padx=0)
 
         self.log_box = scrolledtext.ScrolledText(
             frame_log,
@@ -836,14 +901,16 @@ class MonitorApp(tk.Tk):
             width=110,
             state="disabled",
             font=("Consolas", 9),
-            relief="solid",
-            borderwidth=1,
-            background="#ffffff",
+            relief="flat",
+            borderwidth=0,
+            background=self.bg_secundario,
+            foreground=self.fg_texto,
+            insertbackground=self.fg_texto,
         )
-        self.log_box.pack(fill="both", expand=True)
+        self.log_box.pack(fill="both", expand=True, padx=2, pady=2)
 
         # Frame lateral de filtros
-        self.filtro_lateral = ttk.Frame(self.content_frame, width=200, relief="ridge")
+        self.filtro_lateral = tk.Frame(self.content_frame, width=200, bg=self.bg_terciario, relief="solid", bd=1)
         self.filtro_lateral.pack_propagate(False)
         self.filtro_visivel = False
 
@@ -876,7 +943,7 @@ class MonitorApp(tk.Tk):
 
     def _gerenciar_sessoes(self):
         """Abre janela de gerenciamento de sessões"""
-        JanelaGerenciarSessoes(self, self.config)
+        JanelaGerenciarSessoes(self, self.config, self.bg_principal, self.bg_secundario, self.fg_texto, self.fg_texto_secundario)
 
     def _alternar_filtro_lateral(self):
         if self.filtro_visivel:
@@ -891,17 +958,17 @@ class MonitorApp(tk.Tk):
         for widget in self.filtro_lateral.winfo_children():
             widget.destroy()
 
-        ttk.Label(self.filtro_lateral, text="Filtros", font=("Segoe UI", 11, "bold")).pack(pady=(6, 8))
+        ttk.Label(self.filtro_lateral, text="Filtros", font=("Segoe UI", 11, "bold"), background=self.bg_terciario, foreground=self.cor_acento).pack(pady=(8, 12), padx=8)
 
-        ttk.Checkbutton(self.filtro_lateral, text="🆕 Novos", variable=self.filter_novos).pack(anchor="w", pady=2)
-        ttk.Checkbutton(self.filtro_lateral, text="⚠️ Desatualizados", variable=self.filter_desatualizados).pack(anchor="w", pady=2)
-        ttk.Checkbutton(self.filtro_lateral, text="✅ Atualizados", variable=self.filter_atualizados).pack(anchor="w", pady=2)
+        ttk.Checkbutton(self.filtro_lateral, text="🆕 Novos", variable=self.filter_novos).pack(anchor="w", pady=4, padx=8)
+        ttk.Checkbutton(self.filtro_lateral, text="⚠️ Desatualizados", variable=self.filter_desatualizados).pack(anchor="w", pady=4, padx=8)
+        ttk.Checkbutton(self.filtro_lateral, text="✅ Atualizados", variable=self.filter_atualizados).pack(anchor="w", pady=4, padx=8)
 
-        ttk.Separator(self.filtro_lateral, orient="horizontal").pack(fill="x", pady=8)
+        ttk.Separator(self.filtro_lateral, orient="horizontal").pack(fill="x", pady=10, padx=8)
 
-        ttk.Button(self.filtro_lateral, text="Aplicar Filtro", width=18, command=self._aplicar_filtros).pack(pady=(0,6))
-        ttk.Button(self.filtro_lateral, text="Limpar Filtros", width=18, command=self._limpar_filtros).pack(pady=(0,8))
-        ttk.Button(self.filtro_lateral, text="Fechar", width=18, command=self._alternar_filtro_lateral).pack(pady=(0,10))
+        ttk.Button(self.filtro_lateral, text="Aplicar Filtro", width=16, command=self._aplicar_filtros).pack(pady=(0,6), padx=8)
+        ttk.Button(self.filtro_lateral, text="Limpar Filtros", width=16, command=self._limpar_filtros).pack(pady=(0,8), padx=8)
+        ttk.Button(self.filtro_lateral, text="Fechar", width=16, command=self._alternar_filtro_lateral).pack(pady=(0,10), padx=8)
 
     # ------------------------- LOG ------------------------- #
     def log(self, msg: str):
@@ -919,7 +986,7 @@ class MonitorApp(tk.Tk):
 
         tag_name = f"link_{id(caminho)}_{datetime.now().timestamp()}"
         self.log_box.tag_add(tag_name, start_index, end_index)
-        self.log_box.tag_config(tag_name, foreground="blue", underline=1)
+        self.log_box.tag_config(tag_name, foreground="#43B581", underline=1)
 
         def abrir_pasta(event, path=caminho):
             try:
@@ -1533,64 +1600,70 @@ class MonitorApp(tk.Tk):
             self.log("✓ VERIFICAÇÃO CONCLUÍDA")
             self.log("=" * 90)
 
-            # Dialog personalizado com 3 botões
+            # Dialog personalizado com 3 botões (Dark Theme)
             dialog = tk.Toplevel(self)
             dialog.title("Verificação Concluída")
             dialog.geometry("280x160")
             dialog.resizable(False, False)
             dialog.grab_set()
             dialog.transient(self)
-            dialog.configure(bg="#f2f2f2")
+            dialog.configure(bg=self.bg_principal)
             
             # Ícone/Header
-            header_frame = ttk.Frame(dialog)
+            header_frame = tk.Frame(dialog, bg=self.bg_principal)
             header_frame.pack(pady=5, padx=15)
             
-            ttk.Label(
+            tk.Label(
                 header_frame,
                 text="✓ Verificação Concluída",
                 font=("Segoe UI", 10, "bold"),
-                background="#f2f2f2"
+                background=self.bg_principal,
+                foreground=self.cor_acento
             ).pack(anchor="w")
             
             # Informações
-            info_frame = ttk.Frame(dialog)
+            info_frame = tk.Frame(dialog, bg=self.bg_principal)
             info_frame.pack(pady=(0, 5), padx=15, fill="both", expand=True)
             
-            ttk.Label(
+            tk.Label(
                 info_frame,
                 text="Resultados da Verificação:",
                 font=("Segoe UI", 8),
-                background="#f2f2f2"
+                background=self.bg_principal,
+                foreground=self.fg_texto
             ).pack(anchor="center", pady=(0, 2))
             
-            ttk.Label(
+            tk.Label(
                 info_frame,
                 text=f"🆕 Novos: {total_novos}",
                 font=("Segoe UI", 9),
-                background="#f2f2f2"
+                background=self.bg_principal,
+                foreground=self.fg_texto
             ).pack(anchor="center", pady=0)
             
-            ttk.Label(
+            
+            tk.Label(
                 info_frame,
                 text=f"⚠️ Desatualizados: {total_desatualizados}",
                 font=("Segoe UI", 9),
-                background="#f2f2f2"
+                background=self.bg_principal,
+                foreground=self.fg_texto
             ).pack(anchor="center", pady=0)
             
-            ttk.Label(
+            tk.Label(
                 info_frame,
                 text=f"✅ Atualizados: {total_atualizados}",
                 font=("Segoe UI", 9),
-                background="#f2f2f2"
+                background=self.bg_principal,
+                foreground=self.fg_texto
             ).pack(anchor="center", pady=0)
             
             # Frame de botões
-            button_frame = ttk.Frame(dialog)
+            button_frame = tk.Frame(dialog, bg=self.bg_principal)
             button_frame.pack(pady=5, fill="x", padx=15)
             
             # Frame interno para centralizar os botões
-            buttons_inner = ttk.Frame(button_frame)
+            buttons_inner = tk.Frame(button_frame, bg=self.bg_principal)
             buttons_inner.pack(anchor="center")
             
             def atualizar():
