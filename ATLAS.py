@@ -262,7 +262,7 @@ class JanelaSelecaoRevit(tk.Toplevel):
         self.resizable(False, False)
         self.grab_set()
         self.transient(parent)
-        self.configure(bg="#f2f2f2")
+        self.configure(bg="#5865F2")
         
         self.versoes = versoes
         self.revit_selecionado = None
@@ -275,7 +275,7 @@ class JanelaSelecaoRevit(tk.Toplevel):
             self,
             text="🔧 Selecionar Revit",
             font=("Segoe UI", 10, "bold"),
-            background="#f2f2f2"
+            background="#5865F2"
         ).pack(pady=8, padx=10)
         
         # Instrução
@@ -283,7 +283,7 @@ class JanelaSelecaoRevit(tk.Toplevel):
             self,
             text="Qual versão deseja usar?",
             font=("Segoe UI", 9),
-            background="#f2f2f2"
+            background="#5865F2"
         ).pack(pady=(0, 5))
         
         # Frame da lista
@@ -806,8 +806,9 @@ class MonitorApp(tk.Tk):
                  foreground=[('active', '#ffffff'), ('pressed', '#ffffff')])
         
         # Combobox
-        style.configure('TCombobox', fieldbackground=self.bg_terciario, background=self.bg_terciario,
+        style.configure('TCombobox', fieldbackground="#5865F2", background="#5865F2",
                        foreground=self.fg_texto)
+        style.map('TCombobox', fieldbackground=[('readonly', '#5865F2'), ('active', '#5865F2')])
         
         # Checkbutton
         style.configure('TCheckbutton', background=self.bg_principal, foreground=self.fg_texto)
