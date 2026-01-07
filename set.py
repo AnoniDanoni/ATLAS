@@ -137,8 +137,16 @@ def gerar_temp_set(resultados, temp_folder=None):
     
     return (temp_file_path, command_file_path)
 
-def gerar_set(resultados):
-    """Extrai caminhos de arquivos novos e desatualizados dos resultados"""
+def gerar_set(resultados, parent=None):
+    """Extrai caminhos de arquivos novos e desatualizados dos resultados
+    
+    Args:
+        resultados: dicionário de resultados da verificação
+        parent: janela pai para o diálogo (opcional)
+    
+    Returns:
+        Caminho do arquivo salvo ou None
+    """
     arquivos = set()
     
     for resultado in resultados.values():
@@ -154,15 +162,22 @@ def gerar_set(resultados):
     if not arquivos:
         return None
     
-    root = tk.Tk()
-    root.withdraw()
+    # Se não houver parent, criar uma janela temporária
+    if parent is None:
+        root = tk.Tk()
+        root.withdraw()
+    
     destino = filedialog.asksaveasfilename(
+        parent=parent,
         title="Salvar lista de arquivos",
         defaultextension=".txt",
         filetypes=[("Text files", "*.txt")],
         initialfile="arquivos_para_processar.txt"
     )
-    root.destroy()
+    
+    # Destruir janela temporária se foi criada
+    if parent is None:
+        root.destroy()
     
     if destino:
         with open(destino, 'w', encoding='utf-8') as f:

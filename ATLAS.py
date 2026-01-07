@@ -1734,7 +1734,7 @@ class MonitorApp(tk.Tk):
             
             def gerar_relatorio():
                 dialog.destroy()
-                destino = set.gerar_set(self.resultados)
+                destino = set_module.gerar_set(self.resultados, parent=self)
                 if destino:
                     self.log(f"\n📄 Lista de arquivos salva em: {destino}")
                     messagebox.showinfo("Relatório Gerado", f"Relatório salvo em:\n{destino}")
