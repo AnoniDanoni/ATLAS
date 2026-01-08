@@ -518,22 +518,38 @@ class JanelaSelecaoPastas(tk.Toplevel):
         self.grab_set()
         self.transient(parent)
 
+        # Cores do tema
+        self.bg_principal = "#36393F"
+        self.bg_secundario = "#2F3136"
+        self.bg_terciario = "#282B30"
+        self.fg_texto = "#FFFFFF"
+        self.fg_texto_secundario = "#B9BBBE"
+        self.cor_acento = "#5865F2"
+        
+        self.configure(bg=self.bg_principal)
         self.pastas_selecionadas = []
         self._criar_interface()
 
     def _criar_interface(self):
-        ttk.Label(self, text="Pastas Selecionadas:", font=("Segoe UI", 11, "bold")).pack(pady=10, padx=10, anchor="w")
-        frame_lista = ttk.Frame(self)
-        frame_lista.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        ttk.Label(self, text="Pastas Selecionadas:", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.fg_texto).pack(pady=10, padx=10, anchor="w")
+        
+        # Frame da lista com borda
+        frame_lista_border = tk.Frame(self, bg=self.cor_acento)
+        frame_lista_border.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        frame_lista = tk.Frame(frame_lista_border, bg=self.bg_principal)
+        frame_lista.pack(fill="both", expand=True, padx=2, pady=2)
 
         scrollbar = ttk.Scrollbar(frame_lista)
         scrollbar.pack(side="right", fill="y")
 
-        self.listbox = tk.Listbox(frame_lista, height=15, yscrollcommand=scrollbar.set, relief="groove", borderwidth=2)
+        self.listbox = tk.Listbox(frame_lista, height=15, yscrollcommand=scrollbar.set, relief="flat", borderwidth=0, 
+                                   bg=self.bg_terciario, fg=self.fg_texto, selectbackground=self.cor_acento, 
+                                   selectforeground="#ffffff", font=("Segoe UI", 9))
         self.listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.listbox.yview)
 
-        frame_botoes = ttk.Frame(self)
+        frame_botoes = tk.Frame(self, bg=self.bg_principal)
         frame_botoes.pack(pady=10)
 
         ttk.Button(frame_botoes, text="➕ Adicionar Pasta", command=self._adicionar_pasta, width=20).grid(row=0, column=0, padx=5)
