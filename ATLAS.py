@@ -329,6 +329,35 @@ class JanelaSelecaoRevit(tk.Toplevel):
         
         ttk.Button(
             buttons_inner,
+            text="🗺 Mapeamento",
+            command=self._fechar,
+            width=13
+        ).pack(side="left", padx=3)
+        
+        # Segunda linha de botões
+        buttons_inner_2 = ttk.Frame(frame_botoes)
+        buttons_inner_2.pack(anchor="center", pady=5)
+        
+        ttk.Button(
+            buttons_inner_2,
+            text="🔍 Procurar",
+            command=self._fechar,
+            width=13
+        ).pack(side="left", padx=3)
+        
+        ttk.Button(
+            buttons_inner_2,
+            text="ℹ️ Informações",
+            command=self._fechar,
+            width=13
+        ).pack(side="left", padx=3)
+        
+        # Terceira linha - Fechar
+        buttons_inner_3 = ttk.Frame(frame_botoes)
+        buttons_inner_3.pack(anchor="center", pady=5)
+        
+        ttk.Button(
+            buttons_inner_3,
             text="✗ Fechar",
             command=self._fechar,
             width=13
@@ -756,6 +785,252 @@ class JanelaGerenciarSessoes(tk.Toplevel):
         self.destroy()
 
 
+# ==================== JANELA DE GERENCIAMENTO DE PASTAS ====================
+
+class JanelaGerenciarPastas(tk.Toplevel):
+    def __init__(self, parent, config, bg_principal="#36393F", bg_secundario="#2F3136", fg_texto="#FFFFFF", fg_texto_secundario="#B9BBBE"):
+        super().__init__(parent)
+        self.title("Gerenciar Pastas")
+        self.geometry("650x600")
+        self.resizable(False, False)
+        self.grab_set()
+        self.transient(parent)
+        
+        self.parent_app = parent
+        self.config = config
+        self.pastas_modificadas = False
+        
+        # Cores do tema
+        self.bg_principal = bg_principal
+        self.bg_secundario = bg_secundario
+        self.bg_terciario = "#282B30"
+        self.fg_texto = fg_texto
+        self.fg_texto_secundario = fg_texto_secundario
+        self.cor_acento = "#5865F2"
+        
+        self.configure(bg=self.bg_principal)
+        
+        self._criar_interface()
+        self._atualizar_lista()
+
+    def _criar_interface(self):
+        # Cabeçalho
+        header_frame = tk.Frame(self, bg=self.bg_secundario)
+        header_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Label(header_frame, text="📁 Pastas Monitoradas", font=("Segoe UI", 12, "bold"), background=self.bg_secundario, foreground=self.cor_acento).pack(pady=10)
+        
+        # Frame da lista com borda
+        frame_lista_border = tk.Frame(self, bg=self.cor_acento)
+        frame_lista_border.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+        
+        frame_lista = tk.Frame(frame_lista_border, bg=self.bg_principal)
+        frame_lista.pack(fill="both", expand=True, padx=2, pady=2)
+        
+        scrollbar = ttk.Scrollbar(frame_lista)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.listbox = tk.Listbox(frame_lista, height=8, yscrollcommand=scrollbar.set, 
+                                   relief="flat", borderwidth=0, bg=self.bg_terciario, fg=self.fg_texto,
+                                   selectbackground=self.cor_acento, selectforeground="#ffffff", font=("Segoe UI", 9))
+        self.listbox.pack(side="left", fill="both", expand=True)
+        self.listbox.bind("<<ListboxSelect>>", self._ao_selecionar_pasta)
+        scrollbar.config(command=self.listbox.yview)
+        
+        # Frame de arquivos ignorados
+        frame_ignorados_label = tk.Frame(self, bg=self.bg_principal)
+        frame_ignorados_label.pack(anchor="w", padx=10, pady=(5, 2))
+        ttk.Label(frame_ignorados_label, text="📋 Arquivos Ignorados:", font=("Segoe UI", 10, "bold"), background=self.bg_principal, foreground=self.fg_texto).pack(anchor="w")
+        
+        frame_ignorados_border = tk.Frame(self, bg=self.cor_acento)
+        frame_ignorados_border.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        frame_ignorados = tk.Frame(frame_ignorados_border, bg=self.bg_principal)
+        frame_ignorados.pack(fill="both", expand=True, padx=2, pady=2)
+        
+        scrollbar_ignorados = ttk.Scrollbar(frame_ignorados)
+        scrollbar_ignorados.pack(side="right", fill="y")
+        
+        self.listbox_ignorados = tk.Listbox(frame_ignorados, height=5, yscrollcommand=scrollbar_ignorados.set, 
+                                             relief="flat", borderwidth=0, bg=self.bg_terciario, fg=self.fg_texto_secundario,
+                                             font=("Segoe UI", 8))
+        self.listbox_ignorados.pack(side="left", fill="both", expand=True)
+        scrollbar_ignorados.config(command=self.listbox_ignorados.yview)
+        
+        # Frame de botões
+        frame_botoes = tk.Frame(self, bg=self.bg_principal)
+        frame_botoes.pack(pady=10)
+        
+        ttk.Button(frame_botoes, text="➕ Adicionar", command=self._adicionar_pasta, width=18).grid(row=0, column=0, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="✏️ Editar", command=self._editar_pasta, width=18).grid(row=0, column=1, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="🗑 Remover", command=self._remover_pasta, width=18).grid(row=1, column=0, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="✓ Fechar", command=self._fechar, width=37).grid(row=1, column=0, columnspan=2, padx=4, pady=10)
+
+    def _atualizar_lista(self):
+        self.listbox.delete(0, "end")
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        for pasta in pastas:
+            self.listbox.insert("end", f"{pasta['caminho']} ({pasta['entrada']} → {pasta['saida']})")
+        
+        # Limpa lista de ignorados se não há pastas
+        if not pastas:
+            self.listbox_ignorados.delete(0, "end")
+    
+    def _ao_selecionar_pasta(self, event=None):
+        """Mostra os arquivos ignorados da pasta selecionada"""
+        self.listbox_ignorados.delete(0, "end")
+        
+        sel = self.listbox.curselection()
+        if not sel:
+            return
+        
+        idx = sel[0]
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        pasta = pastas[idx]
+        caminho_pasta = pasta['caminho']
+        
+        # Verifica se há arquivos ignorados para esta pasta
+        if 'arquivos_ignorados' not in self.config or caminho_pasta not in self.config['arquivos_ignorados']:
+            self.listbox_ignorados.insert("end", "Nenhum arquivo ignorado")
+            return
+        
+        ignorados = self.config['arquivos_ignorados'][caminho_pasta]
+        
+        if not ignorados:
+            self.listbox_ignorados.insert("end", "Nenhum arquivo ignorado")
+        else:
+            for arquivo in ignorados:
+                self.listbox_ignorados.insert("end", f"  • {arquivo}")
+
+    def _adicionar_pasta(self):
+        caminho = filedialog.askdirectory(title="Selecione uma pasta para monitorar")
+        if not caminho:
+            return
+        
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        
+        # Verifica se já existe
+        if any(p['caminho'] == caminho for p in pastas):
+            messagebox.showwarning("Aviso", "Esta pasta já está sendo monitorada!")
+            return
+        
+        # Pede as extensões
+        extensoes = self._pedir_extensoes()
+        if not extensoes:
+            return
+        
+        pastas.append({
+            "caminho": caminho,
+            "entrada": extensoes['entrada'],
+            "saida": extensoes['saida']
+        })
+        
+        atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+        salvar_config(self.config)
+        self.pastas_modificadas = True
+        self._atualizar_lista()
+        self._ao_selecionar_pasta()
+        messagebox.showinfo("Sucesso", "Pasta adicionada com sucesso!")
+
+    def _editar_pasta(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Aviso", "Selecione uma pasta para editar")
+            return
+        
+        idx = sel[0]
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        pasta = pastas[idx]
+        
+        extensoes = self._pedir_extensoes(pasta['entrada'], pasta['saida'])
+        if not extensoes:
+            return
+        
+        pasta['entrada'] = extensoes['entrada']
+        pasta['saida'] = extensoes['saida']
+        
+        atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+        salvar_config(self.config)
+        self.pastas_modificadas = True
+        self._atualizar_lista()
+        self._ao_selecionar_pasta()
+        messagebox.showinfo("Sucesso", "Pasta atualizada com sucesso!")
+
+    def _remover_pasta(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Aviso", "Selecione uma pasta para remover")
+            return
+        
+        idx = sel[0]
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        pasta = pastas[idx]
+        
+        if not messagebox.askyesno("Confirmar", f"Remover pasta?\n{pasta['caminho']}"):
+            return
+        
+        pastas.pop(idx)
+        atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+        salvar_config(self.config)
+        self.pastas_modificadas = True
+        self._atualizar_lista()
+        self.listbox_ignorados.delete(0, "end")
+        messagebox.showinfo("Sucesso", "Pasta removida com sucesso!")
+
+    def _pedir_extensoes(self, entrada_padrao="rvt", saida_padrao="ifc"):
+        """Abre diálogo para escolher extensões"""
+        dialog = tk.Toplevel(self)
+        dialog.title("Escolher Extensões")
+        dialog.geometry("350x250")
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        dialog.transient(self)
+        dialog.configure(bg=self.bg_principal)
+        
+        # Cabeçalho
+        ttk.Label(dialog, text="Extensões", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.cor_acento).pack(pady=10)
+        
+        # Frame para inputs
+        frame = tk.Frame(dialog, bg=self.bg_principal)
+        frame.pack(padx=20, pady=10, fill="both", expand=True)
+        
+        ttk.Label(frame, text="Extensão de Entrada:", font=("Segoe UI", 10), background=self.bg_principal, foreground=self.fg_texto).pack(anchor="w", pady=(0, 5))
+        entrada_var = tk.StringVar(value=entrada_padrao)
+        entrada_combo = ttk.Combobox(frame, textvariable=entrada_var, values=["dwg", "rvt", "rfa"], state="readonly", width=30)
+        entrada_combo.pack(anchor="w", pady=(0, 15))
+        
+        ttk.Label(frame, text="Extensão de Saída:", font=("Segoe UI", 10), background=self.bg_principal, foreground=self.fg_texto).pack(anchor="w", pady=(0, 5))
+        saida_var = tk.StringVar(value=saida_padrao)
+        saida_combo = ttk.Combobox(frame, textvariable=saida_var, values=["ifc", "nwc"], state="readonly", width=30)
+        saida_combo.pack(anchor="w")
+        
+        resultado = [None]
+        
+        def confirmar():
+            resultado[0] = {'entrada': entrada_var.get(), 'saida': saida_var.get()}
+            dialog.destroy()
+        
+        # Frame de botões
+        btn_frame = tk.Frame(dialog, bg=self.bg_principal)
+        btn_frame.pack(pady=10, fill="x", padx=20)
+        
+        ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy, width=15).pack(side="right", padx=(5, 0))
+        ttk.Button(btn_frame, text="✓ OK", command=confirmar, width=15).pack(side="right")
+        
+        self.wait_window(dialog)
+        return resultado[0]
+
+    def _fechar(self):
+        if self.pastas_modificadas:
+            self.parent_app.carregar_sessao_ativa()
+        self.destroy()
+
+
 # ==================== INTERFACE PRINCIPAL ====================
 
 
@@ -801,7 +1076,6 @@ class MonitorApp(tk.Tk):
         self.visualizando_ignorados = False
 
         self._montar_interface()
-        self._atualizar_lista_gui()
         
         # Mostra informação sobre o diretório Atlas ao iniciar
         self.log(f"📁 Configurações salvas em: {DIRETORIO_ATLAS}")
@@ -872,62 +1146,14 @@ class MonitorApp(tk.Tk):
             frame_botoes, text="🔍 Verificar Atualizações", width=25, command=self._verificar_atualizacoes
         ).grid(row=1, column=0, padx=8, pady=4)
         ttk.Button(
-            frame_botoes, text="❌ Fechar", width=25, command=self.destroy
+            frame_botoes, text="📁 Mapeamento", width=25, command=self._gerenciar_pastas
         ).grid(row=1, column=1, padx=8, pady=4)
-
-        # Lista de pastas com borda melhorada
-        ttk.Label(
-            self, text="Pastas Monitoradas:", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.fg_texto
-        ).pack(anchor="w", padx=20, pady=(10, 3))
-
-        # Frame para listbox com borda (roxo muito desbotado)
-        frame_lista = tk.Frame(self, bg="#3D3F5C", highlightthickness=0)
-        frame_lista.pack(padx=20, pady=(0, 12), fill="both")
-        
-        self.lista_pastas = tk.Listbox(
-            frame_lista, height=5, width=110, relief="flat", borderwidth=0, bg=self.bg_terciario,
-            selectmode=tk.EXTENDED, fg=self.fg_texto, selectbackground=self.cor_acento,
-            selectforeground="#ffffff", font=("Segoe UI", 9)
-        )
-        self.lista_pastas.pack(padx=2, pady=2, fill="both", expand=True)
-
-        ttk.Label(
-            self, text="Relatório:", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.fg_texto
-        ).pack(anchor="w", padx=20, pady=(5, 3))
-
-        # Container principal
-        self.content_frame = tk.Frame(self, bg=self.bg_principal)
-        self.content_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
-
-        # Frame do botão de filtro
-        frame_filtro_relatorio = tk.Frame(self.content_frame, bg=self.bg_principal)
-        frame_filtro_relatorio.pack(fill="x", padx=0, pady=(0, 8))
-        self.btn_ignorados = ttk.Button(frame_filtro_relatorio, text="📋 Ignorados", width=15, command=self._mostrar_ignorados)
-        self.btn_ignorados.pack(side="left", padx=2)
-        ttk.Button(frame_filtro_relatorio, text="🎛 Filtros", width=15, command=self._alternar_filtro_lateral).pack(side="right", padx=2)
-        ttk.Button(frame_filtro_relatorio, text="🔄 Reverter Ignorados", width=18, command=self._reverter_ignorados).pack(side="right", padx=2)
-        ttk.Button(frame_filtro_relatorio, text="🚫 Ignorar Arquivos", width=18, command=self._ignorar_arquivos).pack(side="right", padx=2)
-
-        # Log com borda (roxo muito desbotado)
-        frame_log = tk.Frame(self.content_frame, bg="#5A5E93", highlightthickness=0)
-        frame_log.pack(side="left", fill="both", expand=True, padx=0)
-
-        self.log_box = scrolledtext.ScrolledText(
-            frame_log,
-            height=20,
-            width=110,
-            state="disabled",
-            font=("Consolas", 9),
-            relief="flat",
-            borderwidth=0,
-            background=self.bg_secundario,
-            foreground=self.fg_texto,
-            insertbackground=self.fg_texto,
-        )
-        self.log_box.pack(fill="both", expand=True, padx=2, pady=2)
+        ttk.Button(
+            frame_botoes, text="📊 Relatório", width=25, command=self._abrir_relatorio
+        ).grid(row=2, column=0, columnspan=2, padx=8, pady=4)
 
         # Frame lateral de filtros
-        self.filtro_lateral = tk.Frame(self.content_frame, width=200, bg=self.bg_terciario, relief="solid", bd=1)
+        self.filtro_lateral = tk.Frame(self, width=200, bg=self.bg_terciario, relief="solid", bd=1)
         self.filtro_lateral.pack_propagate(False)
         self.filtro_visivel = False
 
@@ -955,12 +1181,20 @@ class MonitorApp(tk.Tk):
     def carregar_sessao_ativa(self):
         """Carrega as pastas da sessão ativa"""
         self.pastas = obter_pastas_sessao(self.config, self.sessao_atual)
-        self._atualizar_lista_gui()
         self._atualizar_combo_sessoes()
 
     def _gerenciar_sessoes(self):
         """Abre janela de gerenciamento de sessões"""
         JanelaGerenciarSessoes(self, self.config, self.bg_principal, self.bg_secundario, self.fg_texto, self.fg_texto_secundario)
+
+    def _gerenciar_pastas(self):
+        """Abre janela de gerenciamento de pastas"""
+        JanelaGerenciarPastas(self, self.config, self.bg_principal, self.bg_secundario, self.fg_texto, self.fg_texto_secundario)
+
+    def _abrir_relatorio(self):
+        """Abre janela de relatório"""
+        JanelaRelatorio(self, self.config, self.resultados, self.bg_principal, self.bg_secundario, self.fg_texto, self.fg_texto_secundario, 
+                       self.filter_novos, self.filter_desatualizados, self.filter_atualizados, self._ignorar_arquivos, self._reverter_ignorados)
 
     def _alternar_filtro_lateral(self):
         if self.filtro_visivel:
@@ -983,61 +1217,27 @@ class MonitorApp(tk.Tk):
 
         ttk.Separator(self.filtro_lateral, orient="horizontal").pack(fill="x", pady=10, padx=8)
 
-        ttk.Button(self.filtro_lateral, text="Aplicar Filtro", width=16, command=self._aplicar_filtros).pack(pady=(0,6), padx=8)
-        ttk.Button(self.filtro_lateral, text="Limpar Filtros", width=16, command=self._limpar_filtros).pack(pady=(0,8), padx=8)
-        ttk.Button(self.filtro_lateral, text="Fechar", width=16, command=self._alternar_filtro_lateral).pack(pady=(0,10), padx=8)
-
-    # ------------------------- LOG ------------------------- #
+    # ------------------------- LOG (removido, usar janela de Relatório) ------------------------- #
     def log(self, msg: str):
-        self.log_box.config(state="normal")
-        self.log_box.insert("end", f"{msg}\n")
-        self.log_box.see("end")
-        self.log_box.config(state="disabled")
+        """Log foi removido da interface principal. Use a janela de Relatório."""
+        pass
 
     def log_link(self, texto: str, caminho: str):
-        self.log_box.config(state="normal")
-
-        start_index = self.log_box.index("end-1c")
-        self.log_box.insert("end", f"{texto}\n")
-        end_index = self.log_box.index("end-1c")
-
-        tag_name = f"link_{id(caminho)}_{datetime.now().timestamp()}"
-        self.log_box.tag_add(tag_name, start_index, end_index)
-        self.log_box.tag_config(tag_name, foreground="#43B581", underline=1)
-
-        def abrir_pasta(event, path=caminho):
-            try:
-                path = os.path.normpath(path)
-                if os.path.exists(path):
-                    subprocess.run(['explorer', '/select,', path])
-                else:
-                    messagebox.showerror("Erro", f"Arquivo não encontrado:\n{path}")
-            except Exception as e:
-                messagebox. showerror("Erro", f"Erro ao abrir explorer:\n{str(e)}")
-
-        self.log_box. tag_bind(tag_name, "<Button-1>", abrir_pasta)
-        self.log_box.tag_bind(tag_name, "<Enter>", lambda e: self.log_box.config(cursor="hand2"))
-        self. log_box.tag_bind(tag_name, "<Leave>", lambda e: self.log_box.config(cursor=""))
-
-        self.log_box.see("end")
-        self.log_box.config(state="disabled")
+        """Log foi removido da interface principal. Use a janela de Relatório."""
+        pass
 
     def limpar_log(self):
-        self.log_box.config(state="normal")
-        self.log_box.delete(1.0, "end")
-        self.log_box.config(state="disabled")
+        """Log foi removido da interface principal. Use a janela de Relatório."""
+        pass
 
     def rodar_em_thread(self, func):
         threading.Thread(target=func, daemon=True).start()
 
     # ------------------------- CONFIGURAÇÃO ------------------------- #
-    def _atualizar_lista_gui(self):
-        self.lista_pastas.delete(0, "end")
-        for p in self.pastas:
-            self.lista_pastas.insert("end", f"{p['caminho']} ({p['entrada']} → {p['saida']})")
+    # Função removida - as pastas são gerenciadas pela janela de gerenciamento
     
     def _configurar_extensoes_pasta(self, caminho):
-        entrada_win = tk. Toplevel(self)
+        entrada_win = tk.Toplevel(self)
         entrada_win.title("Escolher Extensões")
         entrada_win.geometry("420x400")
         entrada_win.resizable(False, False)
@@ -1167,8 +1367,7 @@ class MonitorApp(tk.Tk):
             }
             atualizar_pastas_sessao(self.config, self.sessao_atual, self.pastas)
             salvar_config(self.config)
-            self._atualizar_lista_gui()
-            self.log(f"📂 Pasta adicionada: {caminho} ({entrada_var.get()} → {saida_var. get()})")
+            self.log(f"📂 Pasta adicionada: {caminho} ({entrada_var.get()} → {saida_var.get()})")
             confirmado[0] = True
             entrada_win.destroy()
 
@@ -1197,23 +1396,7 @@ class MonitorApp(tk.Tk):
         return confirmado[0]
 
     def _remover_pastas(self):
-        selecoes = self.lista_pastas.curselection()
-        if not selecoes:
-            messagebox.showinfo("Aviso", "Selecione uma ou mais pastas para remover.\n\nDica: Use Ctrl+Clique para selecionar múltiplas")
-            return
-
-        qtd = len(selecoes)
-        if not messagebox.askyesno("Confirmar", f"Remover {qtd} pasta(s) selecionada(s)? "):
-            return
-
-        for idx in sorted(selecoes, reverse=True):
-            pasta = self.pastas.pop(idx)
-            self.log(f"🗑 Removida: {pasta['caminho']}")
-
-        atualizar_pastas_sessao(self.config, self.sessao_atual, self.pastas)
-        salvar_config(self.config)
-        self._atualizar_lista_gui()
-        messagebox.showinfo("Sucesso", f"{qtd} pasta(s) removida(s)")
+        messagebox.showinfo("Info", "Use o botão 'Pastas Monitoradas' para gerenciar as pastas.")
 
     # ------------------------- FUNÇÕES DE FILTRO ------------------------- #
     def _aplicar_filtros(self):
@@ -1233,19 +1416,47 @@ class MonitorApp(tk.Tk):
     def _ignorar_arquivos(self):
         """Permite selecionar arquivos para ignorar da pasta selecionada"""
         try:
-            selecionadas = self.lista_pastas.curselection()
-            
-            if not selecionadas:
-                messagebox.showwarning("Aviso", "Selecione uma pasta monitorada")
+            if not self.pastas:
+                messagebox.showwarning("Aviso", "Configure pelo menos uma pasta monitorada")
                 return
             
-            if len(selecionadas) > 1:
-                messagebox.showwarning("Aviso", "Selecione apenas uma pasta por vez")
-                return
-            
-            # Pega o caminho da pasta selecionada
-            idx = selecionadas[0]
-            pasta_info = self.pastas[idx]
+            if len(self.pastas) == 1:
+                pasta_info = self.pastas[0]
+            else:
+                # Se tem múltiplas, pede para selecionar
+                pasta_list = [f"{i+1}. {p['caminho']}" for i, p in enumerate(self.pastas)]
+                from tkinter import simpledialog
+                
+                # Criar uma janela de seleção
+                dialog = tk.Toplevel(self)
+                dialog.title("Selecionar Pasta")
+                dialog.geometry("400x300")
+                dialog.grab_set()
+                dialog.configure(bg=self.bg_principal)
+                
+                ttk.Label(dialog, text="Selecione uma pasta:", font=("Segoe UI", 10, "bold"), background=self.bg_principal, foreground=self.fg_texto).pack(pady=10)
+                
+                listbox = tk.Listbox(dialog, height=10, font=("Segoe UI", 9), bg=self.bg_terciario, fg=self.fg_texto, selectbackground=self.cor_acento)
+                listbox.pack(fill="both", expand=True, padx=10, pady=10)
+                
+                for pasta in pasta_list:
+                    listbox.insert("end", pasta)
+                
+                resultado = [None]
+                
+                def confirmar():
+                    sel = listbox.curselection()
+                    if sel:
+                        resultado[0] = self.pastas[sel[0]]
+                    dialog.destroy()
+                
+                ttk.Button(dialog, text="✓ OK", command=confirmar).pack(pady=10)
+                self.wait_window(dialog)
+                
+                if not resultado[0]:
+                    return
+                
+                pasta_info = resultado[0]
             caminho_pasta = pasta_info['caminho']
             
             # Abre diálogo de seleção de arquivos
@@ -1301,17 +1512,48 @@ class MonitorApp(tk.Tk):
     def _reverter_ignorados(self):
         """Remove todos os arquivos ignorados da pasta selecionada"""
         try:
-            selecionadas = self.lista_pastas.curselection()
-            
-            if not selecionadas:
-                messagebox.showwarning("Aviso", "Selecione uma pasta monitorada")
+            if not self.pastas:
+                messagebox.showwarning("Aviso", "Configure pelo menos uma pasta monitorada")
                 return
             
-            # Pega o caminho da pasta selecionada
-            idx = selecionadas[0]
-            pasta_info = self.pastas[idx]
-            caminho_pasta = pasta_info['caminho']
+            if len(self.pastas) == 1:
+                pasta_info = self.pastas[0]
+            else:
+                # Se tem múltiplas, pede para selecionar
+                pasta_list = [f"{i+1}. {p['caminho']}" for i, p in enumerate(self.pastas)]
+                
+                # Criar uma janela de seleção
+                dialog = tk.Toplevel(self)
+                dialog.title("Selecionar Pasta")
+                dialog.geometry("400x300")
+                dialog.grab_set()
+                dialog.configure(bg=self.bg_principal)
+                
+                ttk.Label(dialog, text="Selecione uma pasta:", font=("Segoe UI", 10, "bold"), background=self.bg_principal, foreground=self.fg_texto).pack(pady=10)
+                
+                listbox = tk.Listbox(dialog, height=10, font=("Segoe UI", 9), bg=self.bg_terciario, fg=self.fg_texto, selectbackground=self.cor_acento)
+                listbox.pack(fill="both", expand=True, padx=10, pady=10)
+                
+                for pasta in pasta_list:
+                    listbox.insert("end", pasta)
+                
+                resultado = [None]
+                
+                def confirmar():
+                    sel = listbox.curselection()
+                    if sel:
+                        resultado[0] = self.pastas[sel[0]]
+                    dialog.destroy()
+                
+                ttk.Button(dialog, text="✓ OK", command=confirmar).pack(pady=10)
+                self.wait_window(dialog)
+                
+                if not resultado[0]:
+                    return
+                
+                pasta_info = resultado[0]
             
+            caminho_pasta = pasta_info['caminho']
             # Verifica se há ignorados
             if 'arquivos_ignorados' not in self.config or caminho_pasta not in self.config['arquivos_ignorados']:
                 messagebox.showinfo("Info", "Nenhum arquivo ignorado nesta pasta")
@@ -1336,65 +1578,27 @@ class MonitorApp(tk.Tk):
             messagebox.showerror("Erro", f"Erro:\n{str(e)}")
             import traceback
             traceback.print_exc()
-
     def _mostrar_ignorados(self):
-        """Mostra a lista de arquivos ignorados no log ou volta ao log de resultados"""
-        try:
-            # Se já está visualizando ignorados, volta ao log de resultados
-            if self.visualizando_ignorados:
-                self.visualizando_ignorados = False
-                self.btn_ignorados.config(text="📋 Ignorados")
-                # Volta ao log de resultados se houver
-                if self.resultados:
-                    filtros = {
-                        'novos': self.filter_novos.get(),
-                        'desatualizados': self.filter_desatualizados.get(),
-                        'atualizados': self.filter_atualizados.get()
-                    }
-                    self._render_resultados_filtrados(self.resultados, filtros)
-                else:
-                    self.limpar_log()
-                    self.log("ℹ️  Execute 'Verificar Atualizações' primeiro para ver resultados")
-                return
-            
-            # Marca que estamos visualizando ignorados
+        """Alterna visualização entre relatório e log"""
+        if self.visualizando_ignorados:
+            self.visualizando_ignorados = False
+            self.btn_ignorados.config(text="📋 Ignorados")
+            # Volta ao log de resultados
+            if self.resultados:
+                filtros = {
+                    'novos': self.filter_novos.get(),
+                    'desatualizados': self.filter_desatualizados.get(),
+                    'atualizados': self.filter_atualizados.get()
+                }
+                self._render_resultados_filtrados(self.resultados, filtros)
+            else:
+                self.limpar_log()
+                self.log("ℹ️  Execute 'Verificar Atualizações' primeiro para ver resultados")
+        else:
             self.visualizando_ignorados = True
             self.btn_ignorados.config(text="📋 Relatório")
-            
-            # Limpa o log
             self.limpar_log()
-            
-            # Verifica se há arquivos ignorados
-            if 'arquivos_ignorados' not in self.config or not self.config['arquivos_ignorados']:
-                self.log("ℹ️  Nenhum arquivo ignorado registrado")
-                return
-            
-            self.log("=" * 80)
-            self.log("📋 LISTA DE ARQUIVOS IGNORADOS")
-            self.log("=" * 80)
-            
-            total_ignorados = 0
-            
-            # Itera sobre todas as pastas
-            for caminho_pasta, arquivos in self.config['arquivos_ignorados'].items():
-                if arquivos:
-                    self.log(f"\n📁 Pasta: {caminho_pasta}")
-                    self.log("-" * 80)
-                    
-                    for i, arquivo in enumerate(arquivos, 1):
-                        self.log(f"  {i:3d}. {arquivo}")
-                    
-                    self.log(f"\n  Subtotal: {len(arquivos)} arquivo(s) ignorado(s)\n")
-                    total_ignorados += len(arquivos)
-            
-            self.log("=" * 80)
-            self.log(f"✓ Total de arquivos ignorados: {total_ignorados}")
-            self.log("=" * 80)
-        
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao exibir ignorados:\n{str(e)}")
-            import traceback
-            traceback.print_exc()
+            self.log("ℹ️  Gerencie os arquivos ignorados na aba 'Pastas Monitoradas'")
 
     def _filtrar_ignorados(self, resultados):
         """Filtra resultados removendo arquivos ignorados"""
@@ -1755,9 +1959,6 @@ class MonitorApp(tk.Tk):
                     self.log(f"\n📄 Lista de arquivos salva em: {destino}")
                     messagebox.showinfo("Relatório Gerado", f"Relatório salvo em:\n{destino}")
             
-            def fechar():
-                dialog.destroy()
-            
             ttk.Button(
                 buttons_inner,
                 text="Atualizar",
@@ -1806,6 +2007,185 @@ class MonitorApp(tk.Tk):
 
             confirmado = self._configurar_extensoes_pasta(caminho)
             # _configurar_extensoes_pasta já adiciona a pasta e salva config quando confirmada
+
+class JanelaRelatorio(tk.Toplevel):
+    def __init__(self, parent, config, resultados, bg_principal, bg_secundario, fg_texto, fg_texto_secundario, 
+                 filter_novos, filter_desatualizados, filter_atualizados, callback_ignorar, callback_reverter):
+        super().__init__(parent)
+        self.title("📊 Relatório")
+        self.geometry("950x650")
+        self.configure(bg=bg_principal)
+        self.resizable(True, True)
+        self.grab_set()
+        
+        self.parent = parent
+        self.config = config
+        self.resultados = resultados
+        self.bg_principal = bg_principal
+        self.bg_secundario = bg_secundario
+        self.fg_texto = fg_texto
+        self.fg_texto_secundario = fg_texto_secundario
+        
+        self.filter_novos = filter_novos
+        self.filter_desatualizados = filter_desatualizados
+        self.filter_atualizados = filter_atualizados
+        
+        self.callback_ignorar = callback_ignorar
+        self.callback_reverter = callback_reverter
+        
+        self._montar_interface()
+        self._aplicar_filtros()
+        
+        # Centraliza a janela
+        self.update_idletasks()
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.winfo_screenheight() // 2) - (height // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _montar_interface(self):
+        """Monta a interface da janela de relatório"""
+        # Frame superior com botões
+        frame_superior = tk.Frame(self, bg=self.bg_principal)
+        frame_superior.pack(fill="x", padx=10, pady=10)
+        
+        # Botões de ação
+        ttk.Button(frame_superior, text="🚫 Ignorar Arquivos", command=self.callback_ignorar, width=20).pack(side="left", padx=5)
+        ttk.Button(frame_superior, text="🔄 Reverter Ignorados", command=self.callback_reverter, width=20).pack(side="left", padx=5)
+        
+        # Separador
+        ttk.Frame(frame_superior).pack(side="left", fill="x", expand=True, padx=10)
+        
+        # Botões de filtro
+        tk.Label(frame_superior, text="Filtros:", bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 5))
+        
+        ttk.Checkbutton(frame_superior, text="🆕 Novos", variable=self.filter_novos, command=self._aplicar_filtros).pack(side="left", padx=2)
+        ttk.Checkbutton(frame_superior, text="⚠️ Desatualizados", variable=self.filter_desatualizados, command=self._aplicar_filtros).pack(side="left", padx=2)
+        ttk.Checkbutton(frame_superior, text="✅ Atualizados", variable=self.filter_atualizados, command=self._aplicar_filtros).pack(side="left", padx=2)
+        
+        # Frame do relatório (log)
+        frame_relatorio = tk.Frame(self, bg=self.bg_principal)
+        frame_relatorio.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        # ScrolledText para o relatório
+        from tkinter.scrolledtext import ScrolledText
+        self.log_relatorio = ScrolledText(frame_relatorio, height=25, width=110, 
+                                          bg=self.bg_secundario, fg=self.fg_texto, 
+                                          font=("Courier New", 8), 
+                                          insertbackground=self.fg_texto,
+                                          selectbackground="#5865F2")
+        self.log_relatorio.pack(fill="both", expand=True)
+        self.log_relatorio.config(state="disabled")
+
+    def _aplicar_filtros(self):
+        """Aplica filtros e atualiza o relatório"""
+        self.limpar_relatorio()
+        
+        filtros = {
+            'novos': self.filter_novos.get(),
+            'desatualizados': self.filter_desatualizados.get(),
+            'atualizados': self.filter_atualizados.get()
+        }
+        
+        self.log_relatorio.config(state="normal")
+        
+        self.log_relatorio.insert("end", "=" * 90 + "\n")
+        self.log_relatorio.insert("end", "🔍 RELATÓRIO (FILTRADO)" if any(not v for v in filtros.values()) else "🔍 RELATÓRIO\n")
+        self.log_relatorio.insert("end", "=" * 90 + "\n")
+        self.log_relatorio.insert("end", f"Sessão: {self.parent.sessao_atual}\n")
+        self.log_relatorio.insert("end", f"Data/Hora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+        self.log_relatorio.insert("end", f"Pastas monitoradas: {len(self.parent.pastas)}\n\n")
+
+        if not self.resultados:
+            self.log_relatorio.insert("end", "Nenhum resultado disponível. Execute 'Verificar Atualizações' primeiro.\n")
+            self.log_relatorio.insert("end", "=" * 90 + "\n")
+            self.log_relatorio.config(state="disabled")
+            return
+
+        total_novos = sum(len(r['novos']) for r in self.resultados.values())
+        total_desatualizados = sum(len(r['desatualizados']) for r in self.resultados.values())
+        total_atualizados = sum(len(r['atualizados']) for r in self.resultados.values())
+        total_problemas = total_novos + total_desatualizados
+
+        self.log_relatorio.insert("end", "📊 RESUMO GERAL\n")
+        self.log_relatorio.insert("end", "-" * 90 + "\n")
+        self.log_relatorio.insert("end", f"🆕 Arquivos novos (precisam ser exportados): {total_novos}\n")
+        self.log_relatorio.insert("end", f"⚠️  Arquivos desatualizados (precisam atualizar): {total_desatualizados}\n")
+        self.log_relatorio.insert("end", f"✅ Arquivos atualizados: {total_atualizados}\n")
+        self.log_relatorio.insert("end", f"📈 Total de ações necessárias: {total_problemas}\n\n")
+
+        if total_problemas == 0 and not filtros['atualizados']:
+            self.log_relatorio.insert("end", "=" * 90 + "\n")
+            self.log_relatorio.insert("end", "✅ TODAS AS PASTAS ESTÃO ATUALIZADAS!\n")
+            self.log_relatorio.insert("end", "=" * 90 + "\n")
+            self.log_relatorio.config(state="disabled")
+            return
+
+        self.log_relatorio.insert("end", "=" * 90 + "\n")
+        self.log_relatorio.insert("end", "📂 DETALHAMENTO POR PASTA\n")
+        self.log_relatorio.insert("end", "=" * 90 + "\n")
+
+        shown_any = False
+        for i, (caminho, resultado) in enumerate(self.resultados.items(), 1):
+            config = resultado['config']
+            novos = resultado['novos']
+            desatualizados = resultado['desatualizados']
+            atualizados = resultado['atualizados']
+
+            mostrar_pasta = False
+            if filtros['novos'] and novos:
+                mostrar_pasta = True
+            if filtros['desatualizados'] and desatualizados:
+                mostrar_pasta = True
+            if filtros['atualizados'] and atualizados:
+                mostrar_pasta = True
+
+            if not mostrar_pasta:
+                continue
+
+            shown_any = True
+            self.log_relatorio.insert("end", f"\n[{i}] {caminho}\n")
+            self.log_relatorio.insert("end", f"    Filtros: {config['entrada'].upper()} → {config['saida'].upper()}\n")
+            self.log_relatorio.insert("end", f"    Status: {len(novos)} novo(s) | {len(desatualizados)} desatualizado(s)\n")
+
+            if filtros['novos'] and novos:
+                self.log_relatorio.insert("end", f"\n    🆕 ARQUIVOS NOVOS ({len(novos)}):\n")
+                for item in novos:
+                    self.log_relatorio.insert("end", f"       • {item['nome_base']}.{item['filtro_entrada']}\n")
+                    self.log_relatorio.insert("end", f"         📥 {item['entrada']['caminho']}\n")
+
+            if filtros['desatualizados'] and desatualizados:
+                self.log_relatorio.insert("end", f"\n    ⚠️  ARQUIVOS DESATUALIZADOS ({len(desatualizados)}):\n")
+                for item in desatualizados:
+                    self.log_relatorio.insert("end", f"       • {item['nome_base']} (desatualizado há {item['dias']} dias)\n")
+                    self.log_relatorio.insert("end", f"         📥 Entrada ({item['filtro_entrada'].upper()}): {item['entrada']['data']}\n")
+                    self.log_relatorio.insert("end", f"            {item['entrada']['caminho']}\n")
+                    self.log_relatorio.insert("end", f"         📤 Saída ({item['filtro_saida'].upper()}): {item['saida']['data']}\n")
+                    self.log_relatorio.insert("end", f"            {item['saida']['caminho']}\n")
+
+            if filtros['atualizados'] and atualizados:
+                self.log_relatorio.insert("end", f"\n    ✅ ARQUIVOS ATUALIZADOS ({len(atualizados)}):\n")
+                for item in atualizados:
+                    self.log_relatorio.insert("end", f"       • {item['nome_base']} ({item['entrada']['data']})\n")
+                    self.log_relatorio.insert("end", f"         📥 Entrada: {item['entrada']['caminho']}\n")
+                    self.log_relatorio.insert("end", f"         📤 Saída: {item['saida']['caminho']}\n")
+
+            self.log_relatorio.insert("end", "\n")
+
+        if not shown_any:
+            self.log_relatorio.insert("end", "\nNenhum item corresponde ao filtro selecionado.\n")
+        self.log_relatorio.insert("end", "=" * 90 + "\n")
+        self.log_relatorio.insert("end", "✓ RELATÓRIO (FILTRADO) CONCLUÍDO\n")
+        self.log_relatorio.insert("end", "=" * 90)
+        
+        self.log_relatorio.config(state="disabled")
+
+    def limpar_relatorio(self):
+        """Limpa o conteúdo do relatório"""
+        self.log_relatorio.config(state="normal")
+        self.log_relatorio.delete("1.0", "end")
+        self.log_relatorio.config(state="disabled")
 
 if __name__ == "__main__":
     app = MonitorApp()
