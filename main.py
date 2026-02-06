@@ -321,7 +321,7 @@ class JanelaRelatorio(tk.Toplevel):
                 fg=self.fg_texto, font=("Segoe UI", 9)).pack(side="left", padx=5, pady=3)
         
         combo = ttk.Combobox(item_frame, values=["Atualizado", "Inapto", "Ignorar"],
-                            state="disabled", width=12, font=("Segoe UI", 8))
+                            state="readonly", width=12, font=("Segoe UI", 8))
         combo.set("Status")
         combo.pack(side="left", padx=5, pady=3)
         
