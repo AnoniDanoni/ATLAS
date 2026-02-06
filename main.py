@@ -54,17 +54,8 @@ class JanelaRelatorio(tk.Toplevel):
         self.filter_desatualizados = filter_desatualizados
         self.filter_atualizados = filter_atualizados
         
-        # Dicionário para armazenar valores dos comboboxes por arquivo
-        self.combo_values = {}
-        
-        # Filtro visual (qual tipo de arquivo mostrar)
-        self.filtro_visual = 'todos'
-        
-        # Dicionário para rastrear widgets de items
-        self.item_widgets = {}
-        
         self._montar_interface()
-        self._preencher_lista_unica()
+        self._aplicar_filtros()
         
         self.update_idletasks()
         width = self.winfo_width()
@@ -97,38 +88,30 @@ class JanelaRelatorio(tk.Toplevel):
         for label in self.resumo_labels.values():
             label.pack(side="left", padx=15)
         
-        # Frame para abas com filtros
-        abas_frame = tk.Frame(self, bg=self.bg_principal)
-        abas_frame.pack(fill="x", padx=10, pady=(5, 0))
-        
-        self.filter_buttons = {}
-        filtros = [
-            ('todos', '📋 Todos', 'all'),
-            ('novos', '🆕 Novos', 'all'),
-            ('desatualizados', '⚠️ Desatualizados', 'all'),
-            ('atualizados', '✅ Atualizados', 'all')
-        ]
-        
-        for key, btn_text, _ in filtros:
-            btn = tk.Button(abas_frame, text=btn_text, bg=self.bg_secundario, 
-                           fg=self.fg_texto, font=("Segoe UI", 9), relief="flat", bd=0,
-                           padx=15, pady=5, cursor="hand2",
-                           command=lambda k=key: self._aplicar_filtro_visual(k))
-            btn.pack(side="left", padx=2)
-            self.filter_buttons[key] = btn
-        
-        # Marcar "Todos" como ativo
-        self._aplicar_filtro_visual('todos')
-        
-        # Frame para lista com scroll
         conteudo_frame = tk.Frame(self, bg=self.bg_principal)
         conteudo_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        self._criar_lista_scroll(conteudo_frame)
+        self.notebook = ttk.Notebook(conteudo_frame)
+        self.notebook.pack(fill="both", expand=True)
+        
+        self.tab_todos = tk.Frame(self.notebook, bg=self.bg_principal)
+        self.tab_novos = tk.Frame(self.notebook, bg=self.bg_principal)
+        self.tab_desatualizados = tk.Frame(self.notebook, bg=self.bg_principal)
+        self.tab_atualizados = tk.Frame(self.notebook, bg=self.bg_principal)
+        
+        self.notebook.add(self.tab_todos, text="📋 Todos")
+        self.notebook.add(self.tab_novos, text="🆕 Novos")
+        self.notebook.add(self.tab_desatualizados, text="⚠️ Desatualizados")
+        self.notebook.add(self.tab_atualizados, text="✅ Atualizados")
+        
+        self._criar_aba_scroll(self.tab_todos)
+        self._criar_aba_scroll(self.tab_novos)
+        self._criar_aba_scroll(self.tab_desatualizados)
+        self._criar_aba_scroll(self.tab_atualizados)
 
-    def _criar_lista_scroll(self, parent_frame):
-        """Cria um widget canvas com scroll para a lista única de arquivos"""
-        canvas_frame = tk.Frame(parent_frame, bg=self.bg_principal)
+    def _criar_aba_scroll(self, tab_frame):
+        """Cria um widget canvas com scroll para uma aba com controles por arquivo"""
+        canvas_frame = tk.Frame(tab_frame, bg=self.bg_principal)
         canvas_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         scrollbar = ttk.Scrollbar(canvas_frame)
@@ -150,39 +133,41 @@ class JanelaRelatorio(tk.Toplevel):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
             return "break"
         
+        def _bind_mousewheel(widget):
+            """Bind mousewheel recursivamente em todos os widgets"""
+            widget.bind("<MouseWheel>", ao_scroll_mouse, add="+")
+            for child in widget.winfo_children():
+                _bind_mousewheel(child)
+        
         frame_conteudo.bind("<Configure>", atualizar_scroll_region)
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
         
-        # Bind mousewheel apenas no canvas
-        canvas.bind("<MouseWheel>", ao_scroll_mouse)
-        frame_conteudo.bind("<MouseWheel>", ao_scroll_mouse)
+        # Bind mousewheel em todo o frame
+        _bind_mousewheel(frame_conteudo)
+        canvas.bind("<MouseWheel>", ao_scroll_mouse, add="+")
+        tab_frame.bind("<MouseWheel>", ao_scroll_mouse, add="+")
+        tab_frame.bind_all("<MouseWheel>", ao_scroll_mouse, add="+") if hasattr(tab_frame, 'bind_all') else None
         
-        self._canvas = canvas
-        self._frame_conteudo = frame_conteudo
-        self._canvas_window = canvas_window
+        tab_frame._canvas = canvas
+        tab_frame._frame_conteudo = frame_conteudo
+        tab_frame._canvas_window = canvas_window
 
-    def _aplicar_filtro_visual(self, filtro):
-        """Aplica um filtro visual à lista e redesenha os itens visíveis"""
-        self.filtro_visual = filtro
+    def _aplicar_filtros(self):
+        """Aplica filtros e atualiza o relatório"""
+        filtros = {
+            'novos': self.filter_novos.get(),
+            'desatualizados': self.filter_desatualizados.get(),
+            'atualizados': self.filter_atualizados.get()
+        }
         
-        # Atualizar aparência dos botões
-        for key, btn in self.filter_buttons.items():
-            if key == filtro:
-                btn.config(bg=self.cor_atualizado, fg=self.fg_texto)
-            else:
-                btn.config(bg=self.bg_secundario, fg=self.fg_texto)
-        
-        # Reaplicar filtros de checkbox
-        self._aplicar_filtros()
-
-    def _preencher_lista_unica(self):
-        """Popula a lista única com todos os arquivos"""
         if not self.resultados:
-            lbl = tk.Label(self._frame_conteudo, text="ℹ️ Nenhum resultado disponível.\nExecute 'Verificar Atualizações' primeiro.", 
+            for widget in self.tab_todos._frame_conteudo.winfo_children():
+                widget.destroy()
+            lbl = tk.Label(self.tab_todos._frame_conteudo, text="ℹ️ Nenhum resultado disponível.\nExecute 'Verificar Atualizações' primeiro.", 
                           bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 10))
             lbl.pack(pady=20)
             return
-        
+
         total_novos = sum(len(r['novos']) for r in self.resultados.values())
         total_desatualizados = sum(len(r['desatualizados']) for r in self.resultados.values())
         total_atualizados = sum(len(r['atualizados']) for r in self.resultados.values())
@@ -190,132 +175,139 @@ class JanelaRelatorio(tk.Toplevel):
         self.resumo_labels['novos'].config(text=f"🆕 Novos: {total_novos}")
         self.resumo_labels['desatualizados'].config(text=f"⚠️ Desatualizados: {total_desatualizados}")
         self.resumo_labels['atualizados'].config(text=f"✅ Atualizados: {total_atualizados}")
+
+        self._preencher_aba_todos(filtros)
+        self._preencher_aba_novos(filtros)
+        self._preencher_aba_desatualizados(filtros)
+        self._preencher_aba_atualizados(filtros)
+
+    def _preencher_aba_todos(self, filtros):
+        """Preenche a aba de todos os resultados com dropdown para cada arquivo"""
+        for widget in self.tab_todos._frame_conteudo.winfo_children():
+            widget.destroy()
         
-        # Adicionar todos os arquivos com tag de tipo
-        for caminho, resultado in self.resultados.items():
-            # Novos
-            if resultado['novos']:
-                titulo_frame = tk.Frame(self._frame_conteudo, bg=self.bg_principal)
-                titulo_frame.pack(fill="x", padx=10, pady=(10, 2))
-                titulo_frame.tag = 'novos'
-                tk.Label(titulo_frame, text=f"🆕 Novos ({len(resultado['novos'])})", bg=self.bg_principal, 
-                        fg=self.cor_novo, font=("Segoe UI", 10, "bold")).pack(anchor="w")
-                self.item_widgets[('titulo', 'novos', caminho)] = titulo_frame
+        total_novos = sum(len(r['novos']) for r in self.resultados.values())
+        total_desatualizados = sum(len(r['desatualizados']) for r in self.resultados.values())
+        total_atualizados = sum(len(r['atualizados']) for r in self.resultados.values())
+        
+        if total_novos == 0 and total_desatualizados == 0 and total_atualizados == 0:
+            lbl = tk.Label(self.tab_todos._frame_conteudo, 
+                          text="ℹ️ Nenhum resultado disponível.\nExecute 'Verificar Atualizações' primeiro.", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 10))
+            lbl.pack(pady=20)
+            return
+        
+        if filtros['novos'] and total_novos > 0:
+            titulo_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
+            titulo_frame.pack(fill="x", padx=10, pady=(10, 2))
+            tk.Label(titulo_frame, text=f"🆕 Novos ({total_novos})", bg=self.bg_principal, 
+                    fg=self.cor_novo, font=("Segoe UI", 10, "bold")).pack(anchor="w")
+            
+            for caminho, resultado in self.resultados.items():
+                novos = resultado['novos']
+                if not novos:
+                    continue
                 
-                for item in resultado['novos']:
+                pasta_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
+                pasta_frame.pack(fill="x", padx=10, pady=(5, 2))
+                tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
+                        fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                
+                for item in novos:
                     nome_arquivo = f"{item['nome_base']}.{item['filtro_entrada']}"
                     caminho_arquivo = item['entrada']['caminho']
-                    item_frame = self._adicionar_item_arquivo(self._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, item['nome_base'])
-                    item_frame.tag = 'novos'
-                    self.item_widgets[('item', 'novos', caminho_arquivo)] = item_frame
+                    nome_base = item['nome_base']
+                    self._adicionar_item_arquivo(self.tab_todos._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
+        
+        if filtros['desatualizados'] and total_desatualizados > 0:
+            titulo_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
+            titulo_frame.pack(fill="x", padx=10, pady=(10, 2))
+            tk.Label(titulo_frame, text=f"⚠️ Desatualizados ({total_desatualizados})", bg=self.bg_principal, 
+                    fg=self.cor_desatualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
             
-            # Desatualizados
-            if resultado['desatualizados']:
-                titulo_frame = tk.Frame(self._frame_conteudo, bg=self.bg_principal)
-                titulo_frame.pack(fill="x", padx=10, pady=(10, 2))
-                titulo_frame.tag = 'desatualizados'
-                tk.Label(titulo_frame, text=f"⚠️ Desatualizados ({len(resultado['desatualizados'])})", bg=self.bg_principal, 
-                        fg=self.cor_desatualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
-                self.item_widgets[('titulo', 'desatualizados', caminho)] = titulo_frame
+            for caminho, resultado in self.resultados.items():
+                desatualizados = resultado['desatualizados']
+                if not desatualizados:
+                    continue
                 
-                for item in resultado['desatualizados']:
+                pasta_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
+                pasta_frame.pack(fill="x", padx=10, pady=(5, 2))
+                tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
+                        fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                
+                for item in desatualizados:
                     nome_arquivo = f"{item['nome_base']} (há {item['dias']} dia(s))"
                     caminho_arquivo = item['entrada']['caminho']
-                    item_frame = self._adicionar_item_arquivo(self._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, item['nome_base'])
-                    item_frame.tag = 'desatualizados'
-                    self.item_widgets[('item', 'desatualizados', caminho_arquivo)] = item_frame
+                    nome_base = item['nome_base']
+                    self._adicionar_item_arquivo(self.tab_todos._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
+        
+        if filtros['atualizados'] and total_atualizados > 0:
+            titulo_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
+            titulo_frame.pack(fill="x", padx=10, pady=(10, 2))
+            tk.Label(titulo_frame, text=f"✅ Atualizados ({total_atualizados})", bg=self.bg_principal, 
+                    fg=self.cor_atualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
             
-            # Atualizados
-            if resultado['atualizados']:
-                titulo_frame = tk.Frame(self._frame_conteudo, bg=self.bg_principal)
-                titulo_frame.pack(fill="x", padx=10, pady=(10, 2))
-                titulo_frame.tag = 'atualizados'
-                tk.Label(titulo_frame, text=f"✅ Atualizados ({len(resultado['atualizados'])})", bg=self.bg_principal, 
-                        fg=self.cor_atualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
-                self.item_widgets[('titulo', 'atualizados', caminho)] = titulo_frame
+            for caminho, resultado in self.resultados.items():
+                atualizados = resultado['atualizados']
+                if not atualizados:
+                    continue
                 
-                for item in resultado['atualizados']:
-                    nome_arquivo = f"{item['nome_base']}.{item['filtro_saida']}"
-                    caminho_arquivo = item['saida']['caminho']
-                    item_frame = self._adicionar_item_arquivo(self._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, item['nome_base'])
-                    item_frame.tag = 'atualizados'
-                    self.item_widgets[('item', 'atualizados', caminho_arquivo)] = item_frame
+                pasta_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
+                pasta_frame.pack(fill="x", padx=10, pady=(5, 2))
+                tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
+                        fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                
+                for item in atualizados:
+                    nome_arquivo = item['nome_base']
+                    caminho_arquivo = item['entrada']['caminho']
+                    nome_base = item['nome_base']
+                    self._adicionar_item_arquivo(self.tab_todos._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
 
-    def _criar_lista_scroll(self, parent_frame):
-        """Cria um widget canvas com scroll para a lista única de arquivos"""
-        canvas_frame = tk.Frame(parent_frame, bg=self.bg_principal)
-        canvas_frame.pack(fill="both", expand=True, padx=5, pady=5)
+    def _preencher_aba_novos(self, filtros):
+        """Preenche a aba de novos con dropdown para cada arquivo"""
+        for widget in self.tab_novos._frame_conteudo.winfo_children():
+            widget.destroy()
         
-        scrollbar = ttk.Scrollbar(canvas_frame)
-        scrollbar.pack(side="right", fill="y")
+        if not filtros['novos']:
+            lbl = tk.Label(self.tab_novos._frame_conteudo, text="Filtro desativado", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 9))
+            lbl.pack(pady=20)
+            return
         
-        canvas = tk.Canvas(canvas_frame, bg=self.bg_terciario, highlightthickness=0,
-                          yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=canvas.yview)
+        total_novos = sum(len(r['novos']) for r in self.resultados.values())
         
-        frame_conteudo = tk.Frame(canvas, bg=self.bg_principal)
-        canvas_window = canvas.create_window((0, 0), window=frame_conteudo, anchor="nw")
+        if total_novos == 0:
+            lbl = tk.Label(self.tab_novos._frame_conteudo, 
+                          text="✅ Nenhum arquivo novo\n(Todos os arquivos já foram exportados)", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 10))
+            lbl.pack(pady=20)
+            return
         
-        def atualizar_scroll_region(event=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-            canvas.itemconfig(canvas_window, width=canvas.winfo_width())
+        titulo_frame = tk.Frame(self.tab_novos._frame_conteudo, bg=self.bg_principal)
+        titulo_frame.pack(fill="x", padx=10, pady=(10, 5))
+        tk.Label(titulo_frame, text=f"📊 Total: {total_novos} arquivo(s) novo(s)", 
+                bg=self.bg_principal, fg=self.cor_novo, font=("Segoe UI", 10, "bold")).pack(anchor="w")
         
-        def ao_scroll_mouse(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-            return "break"
-        
-        frame_conteudo.bind("<Configure>", atualizar_scroll_region)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
-        
-        # Bind mousewheel apenas no canvas
-        canvas.bind("<MouseWheel>", ao_scroll_mouse)
-        frame_conteudo.bind("<MouseWheel>", ao_scroll_mouse)
-        
-        self._canvas = canvas
-        self._frame_conteudo = frame_conteudo
-        self._canvas_window = canvas_window
-
-    def _aplicar_filtros(self):
-        """Mostra/esconde itens baseado no filtro visual e checkboxes"""
-        filtros = {
-            'novos': self.filter_novos.get(),
-            'desatualizados': self.filter_desatualizados.get(),
-            'atualizados': self.filter_atualizados.get()
-        }
-        
-        # Mostrar/esconder itens baseado nos filtros
-        for (tipo_widget, tipo_arquivo, chave), widget in self.item_widgets.items():
-            deve_mostrar = False
+        for caminho, resultado in self.resultados.items():
+            novos = resultado['novos']
+            if not novos:
+                continue
             
-            # Verificar se deve mostrar baseado no filtro visual
-            if self.filtro_visual == 'todos' or self.filtro_visual == tipo_arquivo:
-                # Verificar se o checkbox está ativado
-                if tipo_arquivo == 'novos' and filtros['novos']:
-                    deve_mostrar = True
-                elif tipo_arquivo == 'desatualizados' and filtros['desatualizados']:
-                    deve_mostrar = True
-                elif tipo_arquivo == 'atualizados' and filtros['atualizados']:
-                    deve_mostrar = True
+            pasta_frame = tk.Frame(self.tab_novos._frame_conteudo, bg=self.bg_principal)
+            pasta_frame.pack(fill="x", padx=10, pady=(10, 2))
+            tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
+                    fg=self.cor_acento, font=("Segoe UI", 9, "bold")).pack(anchor="w")
             
-            if deve_mostrar:
-                widget.pack(fill="x", padx=10 if tipo_widget == 'titulo' else 20, pady=2 if tipo_widget == 'item' else (10, 2))
-            else:
-                widget.pack_forget()
-
-    def _propagate_scroll(self, event, widget):
-        """Propaga eventos de scroll para o canvas da aba"""
-        try:
-            parent = widget
-            while parent and not hasattr(parent, '_canvas'):
-                parent = parent.master
+            config_frame = tk.Frame(self.tab_novos._frame_conteudo, bg=self.bg_principal)
+            config_frame.pack(fill="x", padx=20, pady=(0, 5))
+            tk.Label(config_frame, text=f"Filtro: {resultado['config']['entrada'].upper()} → {resultado['config']['saida'].upper()}", 
+                    bg=self.bg_principal, fg=self.fg_texto_secundario, font=("Segoe UI", 8)).pack(anchor="w")
             
-            if parent and hasattr(parent, '_canvas'):
-                canvas = parent._canvas
-                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-                return "break"
-        except:
-            pass
+            for item in novos:
+                nome_arquivo = f"{item['nome_base']}.{item['filtro_entrada']}"
+                caminho_arquivo = item['entrada']['caminho']
+                nome_base = item['nome_base']
+                self._adicionar_item_arquivo(self.tab_novos._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
 
     def _adicionar_item_arquivo(self, parent_frame, nome_arquivo, caminho_pasta, caminho_arquivo, nome_base=""):
         """Adiciona um item de arquivo com dropdown desabilitado e botão de copiar caminho"""
@@ -325,33 +317,18 @@ class JanelaRelatorio(tk.Toplevel):
         item_frame = tk.Frame(parent_frame, bg=self.bg_terciario)
         item_frame.pack(fill="x", padx=20, pady=2)
         
-        lbl = tk.Label(item_frame, text=f"• {nome_arquivo}", bg=self.bg_terciario, 
-                fg=self.fg_texto, font=("Segoe UI", 9))
-        lbl.pack(side="left", padx=5, pady=3)
+        tk.Label(item_frame, text=f"• {nome_arquivo}", bg=self.bg_terciario, 
+                fg=self.fg_texto, font=("Segoe UI", 9)).pack(side="left", padx=5, pady=3)
         
         combo = ttk.Combobox(item_frame, values=["Atualizado", "Inapto", "Ignorar"],
-                            state="readonly", width=12, font=("Segoe UI", 8))
+                            state="disabled", width=12, font=("Segoe UI", 8))
+        combo.set("Status")
         combo.pack(side="left", padx=5, pady=3)
-        
-        # Restaurar valor anterior se existir
-        if caminho_arquivo in self.combo_values:
-            combo.set(self.combo_values[caminho_arquivo])
-        
-        # Salvar valor do combo quando for alterado
-        def ao_mudar_combo(event=None):
-            self.combo_values[caminho_arquivo] = combo.get()
-        
-        combo.bind("<<ComboboxSelected>>", ao_mudar_combo)
-        
-        # Propagação de scroll para widgets filhos
-        combo.bind("<MouseWheel>", lambda e: self._propagate_scroll(e, item_frame))
-        lbl.bind("<MouseWheel>", lambda e: self._propagate_scroll(e, item_frame))
         
         btn_copiar = tk.Button(item_frame, text="copiar caminho", bg=self.bg_terciario, 
                               fg="#5B8DEE", font=("Segoe UI", 9), relief="flat",
                               padx=3, pady=1, bd=0, cursor="hand2")
         btn_copiar.pack(side="left", padx=2, pady=3)
-        btn_copiar.bind("<MouseWheel>", lambda e: self._propagate_scroll(e, item_frame))
         
         def ao_clicar_copiar():
             caminho_pasta_arquivo = os.path.dirname(caminho_arquivo)
@@ -378,8 +355,120 @@ class JanelaRelatorio(tk.Toplevel):
         
         btn_copiar.bind("<Enter>", ao_entrar_botao)
         btn_copiar.bind("<Leave>", ao_sair_botao)
+
+    def _remover_arquivo_ignorado(self, nome_base, caminho_pasta):
+        """Remove o arquivo ignorado dos resultados"""
+        if caminho_pasta not in self.resultados:
+            return
         
-        return item_frame
+        resultado = self.resultados[caminho_pasta]
+        
+        self.resultados[caminho_pasta]['novos'] = [
+            r for r in resultado['novos'] 
+            if r.get('nome_base', '') != nome_base
+        ]
+        
+        self.resultados[caminho_pasta]['desatualizados'] = [
+            r for r in resultado['desatualizados'] 
+            if r.get('nome_base', '') != nome_base
+        ]
+        
+        self.resultados[caminho_pasta]['atualizados'] = [
+            r for r in resultado['atualizados'] 
+            if r.get('nome_base', '') != nome_base
+        ]
+
+    def _preencher_aba_desatualizados(self, filtros):
+        """Preenche a aba de desatualizados com dropdown para cada arquivo"""
+        for widget in self.tab_desatualizados._frame_conteudo.winfo_children():
+            widget.destroy()
+        
+        if not filtros['desatualizados']:
+            lbl = tk.Label(self.tab_desatualizados._frame_conteudo, text="Filtro desativado", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 9))
+            lbl.pack(pady=20)
+            return
+        
+        total_desatualizados = sum(len(r['desatualizados']) for r in self.resultados.values())
+        
+        if total_desatualizados == 0:
+            lbl = tk.Label(self.tab_desatualizados._frame_conteudo, 
+                          text="✅ Nenhum arquivo desatualizado\n(Tudo está sincronizado)", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 10))
+            lbl.pack(pady=20)
+            return
+        
+        titulo_frame = tk.Frame(self.tab_desatualizados._frame_conteudo, bg=self.bg_principal)
+        titulo_frame.pack(fill="x", padx=10, pady=(10, 5))
+        tk.Label(titulo_frame, text=f"📊 Total: {total_desatualizados} arquivo(s) desatualizado(s)", 
+                bg=self.bg_principal, fg=self.cor_desatualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        
+        for caminho, resultado in self.resultados.items():
+            desatualizados = resultado['desatualizados']
+            if not desatualizados:
+                continue
+            
+            pasta_frame = tk.Frame(self.tab_desatualizados._frame_conteudo, bg=self.bg_principal)
+            pasta_frame.pack(fill="x", padx=10, pady=(10, 2))
+            tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
+                    fg=self.cor_acento, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            
+            config_frame = tk.Frame(self.tab_desatualizados._frame_conteudo, bg=self.bg_principal)
+            config_frame.pack(fill="x", padx=20, pady=(0, 5))
+            tk.Label(config_frame, text=f"Filtro: {resultado['config']['entrada'].upper()} → {resultado['config']['saida'].upper()}", 
+                    bg=self.bg_principal, fg=self.fg_texto_secundario, font=("Segoe UI", 8)).pack(anchor="w")
+            
+            for item in desatualizados:
+                nome_arquivo = f"{item['nome_base']} (há {item['dias']} dia(s))"
+                caminho_arquivo = item['entrada']['caminho']
+                nome_base = item['nome_base']
+                self._adicionar_item_arquivo(self.tab_desatualizados._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
+
+    def _preencher_aba_atualizados(self, filtros):
+        """Preenche a aba de atualizados com dropdown para cada arquivo"""
+        for widget in self.tab_atualizados._frame_conteudo.winfo_children():
+            widget.destroy()
+        
+        if not filtros['atualizados']:
+            lbl = tk.Label(self.tab_atualizados._frame_conteudo, text="Filtro desativado", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 9))
+            lbl.pack(pady=20)
+            return
+        
+        total_atualizados = sum(len(r['atualizados']) for r in self.resultados.values())
+        
+        if total_atualizados == 0:
+            lbl = tk.Label(self.tab_atualizados._frame_conteudo, 
+                          text="ℹ️ Nenhum arquivo atualizado\n(Execute a verificação para ver resultados)", 
+                          bg=self.bg_principal, fg=self.fg_texto, font=("Segoe UI", 10))
+            lbl.pack(pady=20)
+            return
+        
+        titulo_frame = tk.Frame(self.tab_atualizados._frame_conteudo, bg=self.bg_principal)
+        titulo_frame.pack(fill="x", padx=10, pady=(10, 5))
+        tk.Label(titulo_frame, text=f"📊 Total: {total_atualizados} arquivo(s) atualizado(s)", 
+                bg=self.bg_principal, fg=self.cor_atualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        
+        for caminho, resultado in self.resultados.items():
+            atualizados = resultado['atualizados']
+            if not atualizados:
+                continue
+            
+            pasta_frame = tk.Frame(self.tab_atualizados._frame_conteudo, bg=self.bg_principal)
+            pasta_frame.pack(fill="x", padx=10, pady=(10, 2))
+            tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
+                    fg=self.cor_acento, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            
+            config_frame = tk.Frame(self.tab_atualizados._frame_conteudo, bg=self.bg_principal)
+            config_frame.pack(fill="x", padx=20, pady=(0, 5))
+            tk.Label(config_frame, text=f"Filtro: {resultado['config']['entrada'].upper()} → {resultado['config']['saida'].upper()}", 
+                    bg=self.bg_principal, fg=self.fg_texto_secundario, font=("Segoe UI", 8)).pack(anchor="w")
+            
+            for item in atualizados:
+                nome_arquivo = f"{item['nome_base']} ({item['entrada']['data']})"
+                caminho_arquivo = item['entrada']['caminho']
+                nome_base = item['nome_base']
+                self._adicionar_item_arquivo(self.tab_atualizados._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
 
 
 # ==================== INTERFACE PRINCIPAL ====================
