@@ -152,6 +152,19 @@ class JanelaRelatorio(tk.Toplevel):
         tab_frame._frame_conteudo = frame_conteudo
         tab_frame._canvas_window = canvas_window
 
+    def _criar_label_selecionavel(self, parent, texto, bg, fg, font_spec, padx=5, pady=3):
+        """Cria um widget de texto selecionável sem bordas, estilizado como label"""
+        text_widget = tk.Text(parent, height=1, width=max(20, len(texto)), bg=bg, fg=fg,
+                             font=font_spec, relief="flat", borderwidth=0,
+                             cursor="arrow", wrap="none", insertwidth=0)
+        text_widget.insert("1.0", texto)
+        text_widget.config(state="disabled")
+        text_widget.pack(side="left", padx=padx, pady=pady)
+        
+        # O widget Text com state="disabled" permite seleção de texto e Ctrl+C automaticamente
+        
+        return text_widget
+
     def _aplicar_filtros(self):
         """Aplica filtros e atualiza o relatório"""
         filtros = {
@@ -210,8 +223,8 @@ class JanelaRelatorio(tk.Toplevel):
                 
                 pasta_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
                 pasta_frame.pack(fill="x", padx=10, pady=(5, 2))
-                tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
-                        fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                self._criar_label_selecionavel(pasta_frame, f"📁 {caminho}", bg=self.bg_principal, 
+                        fg=self.fg_texto, font_spec=("Segoe UI", 9, "bold"))
                 
                 for item in novos:
                     nome_arquivo = f"{item['nome_base']}.{item['filtro_entrada']}"
@@ -232,8 +245,8 @@ class JanelaRelatorio(tk.Toplevel):
                 
                 pasta_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
                 pasta_frame.pack(fill="x", padx=10, pady=(5, 2))
-                tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
-                        fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                self._criar_label_selecionavel(pasta_frame, f"📁 {caminho}", bg=self.bg_principal, 
+                        fg=self.fg_texto, font_spec=("Segoe UI", 9, "bold"))
                 
                 for item in desatualizados:
                     nome_arquivo = f"{item['nome_base']} (há {item['dias']} dia(s))"
@@ -254,8 +267,8 @@ class JanelaRelatorio(tk.Toplevel):
                 
                 pasta_frame = tk.Frame(self.tab_todos._frame_conteudo, bg=self.bg_principal)
                 pasta_frame.pack(fill="x", padx=10, pady=(5, 2))
-                tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
-                        fg=self.fg_texto, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                self._criar_label_selecionavel(pasta_frame, f"📁 {caminho}", bg=self.bg_principal, 
+                        fg=self.fg_texto, font_spec=("Segoe UI", 9, "bold"))
                 
                 for item in atualizados:
                     nome_arquivo = item['nome_base']
@@ -295,8 +308,8 @@ class JanelaRelatorio(tk.Toplevel):
             
             pasta_frame = tk.Frame(self.tab_novos._frame_conteudo, bg=self.bg_principal)
             pasta_frame.pack(fill="x", padx=10, pady=(10, 2))
-            tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
-                    fg=self.cor_acento, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            self._criar_label_selecionavel(pasta_frame, f"📁 {caminho}", bg=self.bg_principal, 
+                    fg=self.cor_acento, font_spec=("Segoe UI", 9, "bold"))
             
             config_frame = tk.Frame(self.tab_novos._frame_conteudo, bg=self.bg_principal)
             config_frame.pack(fill="x", padx=20, pady=(0, 5))
@@ -317,8 +330,9 @@ class JanelaRelatorio(tk.Toplevel):
         item_frame = tk.Frame(parent_frame, bg=self.bg_terciario)
         item_frame.pack(fill="x", padx=20, pady=2)
         
-        tk.Label(item_frame, text=f"• {nome_arquivo}", bg=self.bg_terciario, 
-                fg=self.fg_texto, font=("Segoe UI", 9)).pack(side="left", padx=5, pady=3)
+        self._criar_label_selecionavel(item_frame, f"• {nome_arquivo}", 
+                                        bg=self.bg_terciario, fg=self.fg_texto,
+                                        font_spec=("Segoe UI", 9))
         
         combo = ttk.Combobox(item_frame, values=["Atualizado", "Inapto", "Ignorar"],
                             state="readonly", width=12, font=("Segoe UI", 8))
@@ -410,8 +424,8 @@ class JanelaRelatorio(tk.Toplevel):
             
             pasta_frame = tk.Frame(self.tab_desatualizados._frame_conteudo, bg=self.bg_principal)
             pasta_frame.pack(fill="x", padx=10, pady=(10, 2))
-            tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
-                    fg=self.cor_acento, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            self._criar_label_selecionavel(pasta_frame, f"📁 {caminho}", bg=self.bg_principal, 
+                    fg=self.cor_acento, font_spec=("Segoe UI", 9, "bold"))
             
             config_frame = tk.Frame(self.tab_desatualizados._frame_conteudo, bg=self.bg_principal)
             config_frame.pack(fill="x", padx=20, pady=(0, 5))
@@ -456,8 +470,8 @@ class JanelaRelatorio(tk.Toplevel):
             
             pasta_frame = tk.Frame(self.tab_atualizados._frame_conteudo, bg=self.bg_principal)
             pasta_frame.pack(fill="x", padx=10, pady=(10, 2))
-            tk.Label(pasta_frame, text=f"📁 {caminho}", bg=self.bg_principal, 
-                    fg=self.cor_acento, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            self._criar_label_selecionavel(pasta_frame, f"📁 {caminho}", bg=self.bg_principal, 
+                    fg=self.cor_acento, font_spec=("Segoe UI", 9, "bold"))
             
             config_frame = tk.Frame(self.tab_atualizados._frame_conteudo, bg=self.bg_principal)
             config_frame.pack(fill="x", padx=20, pady=(0, 5))
