@@ -52,6 +52,14 @@ def carregar_config():
                     config['arquivos_ignorados'] = {}
                     print(f"[INFO] Estrutura 'arquivos_ignorados' adicionada")
                 
+                if 'relatorios_inaptid' not in config:
+                    config['relatorios_inaptid'] = {}
+                    print(f"[INFO] Estrutura 'relatorios_inaptid' adicionada")
+                
+                if 'status_arquivos' not in config:
+                    config['status_arquivos'] = {}
+                    print(f"[INFO] Estrutura 'status_arquivos' adicionada")
+                
                 return config
         except Exception as e:
             print(f"[ERRO] Erro ao carregar config: {e}")
@@ -69,7 +77,9 @@ def carregar_config():
             'entrada': 'rvt',
             'saida': 'ifc'
         },
-        'arquivos_ignorados': {}
+        'arquivos_ignorados': {},
+        'relatorios_inaptid': {},
+        'status_arquivos': {}
     }
 
 

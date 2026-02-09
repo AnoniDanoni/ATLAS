@@ -25,6 +25,144 @@ from ui import (
 )
 
 
+# ==================== JANELA DE RELATÓRIO DE ARQUIVO INAPTO ====================
+
+class JanelaRelatorioArquivo(tk.Toplevel):
+    """Janela para criar/editar relatório de arquivo inapto"""
+    
+    def __init__(self, parent, nome_arquivo, caminho_arquivo, config, bg_principal, bg_secundario, fg_texto, fg_texto_secundario, btn_relatorio=None, combo=None):
+        super().__init__(parent)
+        self.title(f"📝 Relatório - {nome_arquivo}")
+        self.geometry("600x500")
+        self.configure(bg=bg_principal)
+        self.grab_set()
+        self.transient(parent)
+        
+        self.nome_arquivo = nome_arquivo
+        self.caminho_arquivo = caminho_arquivo
+        self.config = config
+        self.btn_relatorio = btn_relatorio
+        self.combo = combo
+        self.foi_salvo = False
+        self.bg_principal = bg_principal
+        self.bg_secundario = bg_secundario
+        self.bg_terciario = "#282B30"
+        self.fg_texto = fg_texto
+        self.fg_texto_secundario = fg_texto_secundario
+        self.cor_acento = "#5865F2"
+        
+        # Inicializar estrutura de relatórios se não existir
+        if 'relatorios_inaptid' not in self.config:
+            self.config['relatorios_inaptid'] = {}
+        
+        # Capturar evento de fechamento
+        self.protocol("WM_DELETE_WINDOW", self._ao_fechar)
+        
+        self._montar_interface()
+        self._carregar_relatorio()
+        
+    def _montar_interface(self):
+        """Monta a interface da janela"""
+        # Header
+        header_frame = tk.Frame(self, bg=self.bg_secundario)
+        header_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Label(header_frame, text=f"📝 Relatório de Arquivo Inapto", 
+                 font=("Segoe UI", 11, "bold"), background=self.bg_secundario, 
+                 foreground=self.cor_acento).pack(pady=10)
+        
+        # Info do arquivo
+        info_frame = tk.Frame(self, bg=self.bg_principal)
+        info_frame.pack(fill="x", padx=15, pady=(0, 10))
+        
+        ttk.Label(info_frame, text=f"Arquivo: {self.nome_arquivo}", 
+                 font=("Segoe UI", 9), background=self.bg_principal, 
+                 foreground=self.fg_texto).pack(anchor="w")
+        
+        ttk.Label(info_frame, text=f"Caminho: {self.caminho_arquivo}", 
+                 font=("Segoe UI", 8), background=self.bg_principal, 
+                 foreground=self.fg_texto_secundario).pack(anchor="w", pady=(3, 0))
+        
+        # Texto do relatório
+        ttk.Label(self, text="Motivo da inaptidão:", 
+                 font=("Segoe UI", 10, "bold"), background=self.bg_principal, 
+                 foreground=self.fg_texto).pack(anchor="w", padx=15, pady=(0, 3))
+        
+        frame_texto = tk.Frame(self, bg=self.cor_acento, height=200)
+        frame_texto.pack(fill="x", padx=15, pady=(0, 10))
+        frame_texto.pack_propagate(False)
+        
+        frame_texto_inner = tk.Frame(frame_texto, bg=self.bg_principal)
+        frame_texto_inner.pack(fill="both", expand=True, padx=2, pady=2)
+        
+        scrollbar = ttk.Scrollbar(frame_texto_inner)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.texto_relatorio = tk.Text(frame_texto_inner, 
+                                       bg=self.bg_terciario, 
+                                       fg=self.fg_texto,
+                                       font=("Segoe UI", 9),
+                                       height=8,
+                                       relief="flat",
+                                       borderwidth=0,
+                                       yscrollcommand=scrollbar.set,
+                                       wrap="word",
+                                       padx=8,
+                                       pady=8)
+        self.texto_relatorio.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.texto_relatorio.yview)
+        
+        # Botões
+        btn_frame = tk.Frame(self, bg=self.bg_principal)
+        btn_frame.pack(fill="x", padx=15, pady=10)
+        
+        ttk.Button(btn_frame, text="Cancelar", command=self._ao_fechar, width=20).pack(side="right", padx=(5, 0))
+        ttk.Button(btn_frame, text="✓ OK", command=self._salvar, width=20).pack(side="right")
+
+    
+    def _carregar_relatorio(self):
+        """Carrega o relatório salvo se existir"""
+        if self.caminho_arquivo in self.config['relatorios_inaptid']:
+            relatorio = self.config['relatorios_inaptid'][self.caminho_arquivo]
+            self.texto_relatorio.insert("1.0", relatorio)
+    
+    def _ao_fechar(self):
+        """Handler para fechar a janela (sem salvar)"""
+        if not self.foi_salvo:
+            # Se não foi salvo e existe um combo, restaurar para "Status"
+            if self.combo:
+                self.combo.set("Status")
+                # Limpar o status salvo também
+                if 'status_arquivos' in self.config and self.caminho_arquivo in self.config['status_arquivos']:
+                    del self.config['status_arquivos'][self.caminho_arquivo]
+                    salvar_config(self.config)
+        
+        self.destroy()
+    
+    def _salvar(self):
+        """Salva o relatório"""
+        texto = self.texto_relatorio.get("1.0", "end-1c")
+        
+        if not texto.strip():
+            messagebox.showwarning("Aviso", "Digite o motivo da inaptidão!")
+            return
+        
+        if 'relatorios_inaptid' not in self.config:
+            self.config['relatorios_inaptid'] = {}
+        
+        self.config['relatorios_inaptid'][self.caminho_arquivo] = texto
+
+        salvar_config(self.config)
+        
+        # Mostrar o botão de relatório se foi passado
+        if self.btn_relatorio and not self.btn_relatorio.winfo_ismapped():
+            self.btn_relatorio.pack(side="left", padx=2, pady=3)
+        
+        self.foi_salvo = True
+        messagebox.showinfo("Sucesso", "Relatório salvo com sucesso!")
+        self.destroy()
+
+
 # ==================== JANELA DE RELATÓRIO ====================
 
 class JanelaRelatorio(tk.Toplevel):
@@ -336,13 +474,65 @@ class JanelaRelatorio(tk.Toplevel):
         
         combo = ttk.Combobox(item_frame, values=["Atualizado", "Inapto", "Ignorar"],
                             state="readonly", width=12, font=("Segoe UI", 8))
-        combo.set("Status")
+        
+        # Carregar status anterior se existir
+        if 'status_arquivos' in self.config and caminho_arquivo in self.config['status_arquivos']:
+            status_anterior = self.config['status_arquivos'][caminho_arquivo]
+            combo.set(status_anterior)
+        else:
+            combo.set("Status")
+        
         combo.pack(side="left", padx=5, pady=3)
         
         btn_copiar = tk.Button(item_frame, text="copiar caminho", bg=self.bg_terciario, 
                               fg="#5B8DEE", font=("Segoe UI", 9), relief="flat",
                               padx=3, pady=1, bd=0, cursor="hand2")
         btn_copiar.pack(side="left", padx=2, pady=3)
+        
+        # Botão para abrir relatório (inicialmente oculto)
+        btn_relatorio = tk.Button(item_frame, text="abrir relatório", bg=self.bg_terciario, 
+                                 fg="#2ECC71", font=("Segoe UI", 9), relief="flat",
+                                 padx=3, pady=1, bd=0, cursor="hand2")
+        # Só mostrar se existe relatório salvo E o status é "Inapto"
+        if ('relatorios_inaptid' in self.config and caminho_arquivo in self.config['relatorios_inaptid'] and 
+            'status_arquivos' in self.config and self.config['status_arquivos'].get(caminho_arquivo) == 'Inapto'):
+            btn_relatorio.pack(side="left", padx=2, pady=3)
+        
+        def ao_mudar_status(event=None):
+            """Callback quando o status é alterado"""
+            status_selecionado = combo.get()
+            
+            # Pegar status anterior ANTES de salvar o novo
+            status_anterior = self.config.get('status_arquivos', {}).get(caminho_arquivo)
+            
+            # Salvar o status
+            if 'status_arquivos' not in self.config:
+                self.config['status_arquivos'] = {}
+            self.config['status_arquivos'][caminho_arquivo] = status_selecionado
+            salvar_config(self.config)
+            
+            if status_selecionado == "Inapto":
+                # Se estava em outro status, limpar o relatório anterior
+                if status_anterior and status_anterior != "Inapto" and caminho_arquivo in self.config.get('relatorios_inaptid', {}):
+                    # Remover relatório anterior
+                    del self.config['relatorios_inaptid'][caminho_arquivo]
+                    salvar_config(self.config)
+                
+                # Abre a janela de relatório
+                JanelaRelatorioArquivo(self, nome_arquivo, caminho_arquivo, self.config, 
+                                     self.bg_principal, self.bg_secundario, self.fg_texto, 
+                                     self.fg_texto_secundario, btn_relatorio, combo)
+                
+                # Atualizar visibilidade do botão de relatório
+                if 'relatorios_inaptid' in self.config and caminho_arquivo in self.config['relatorios_inaptid']:
+                    if btn_relatorio.winfo_ismapped() == 0:  # Se não está visível
+                        btn_relatorio.pack(side="left", padx=2, pady=3)
+            else:
+                # Se mudou de Inapto para outra coisa, esconder o botão de relatório
+                if btn_relatorio.winfo_ismapped():
+                    btn_relatorio.pack_forget()
+        
+        combo.bind("<<ComboboxSelected>>", ao_mudar_status)
         
         def ao_clicar_copiar():
             caminho_pasta_arquivo = os.path.dirname(caminho_arquivo)
@@ -359,16 +549,32 @@ class JanelaRelatorio(tk.Toplevel):
             
             self.after(2000, remover_msg)
         
-        btn_copiar.config(command=ao_clicar_copiar)
+        def ao_clicar_relatorio():
+            """Abre o relatório para edição"""
+            JanelaRelatorioArquivo(self, nome_arquivo, caminho_arquivo, self.config, 
+                                 self.bg_principal, self.bg_secundario, self.fg_texto, 
+                                 self.fg_texto_secundario, btn_relatorio, combo)
         
-        def ao_entrar_botao(event):
+        btn_copiar.config(command=ao_clicar_copiar)
+        btn_relatorio.config(command=ao_clicar_relatorio)
+        
+        def ao_entrar_copiar(event):
             btn_copiar.config(bg=self.bg_secundario)
         
-        def ao_sair_botao(event):
+        def ao_sair_copiar(event):
             btn_copiar.config(bg=self.bg_terciario)
         
-        btn_copiar.bind("<Enter>", ao_entrar_botao)
-        btn_copiar.bind("<Leave>", ao_sair_botao)
+        def ao_entrar_relatorio(event):
+            btn_relatorio.config(bg=self.bg_secundario)
+        
+        def ao_sair_relatorio(event):
+            btn_relatorio.config(bg=self.bg_terciario)
+        
+        btn_copiar.bind("<Enter>", ao_entrar_copiar)
+        btn_copiar.bind("<Leave>", ao_sair_copiar)
+        btn_relatorio.bind("<Enter>", ao_entrar_relatorio)
+        btn_relatorio.bind("<Leave>", ao_sair_relatorio)
+
 
     def _remover_arquivo_ignorado(self, nome_base, caminho_pasta):
         """Remove o arquivo ignorado dos resultados"""
