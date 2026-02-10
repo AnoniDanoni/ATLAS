@@ -354,7 +354,7 @@ class JanelaRelatorio(tk.Toplevel):
             tk.Label(titulo_frame, text=f"🆕 Novos ({total_novos})", bg=self.bg_principal, 
                     fg=self.cor_novo, font=("Segoe UI", 10, "bold")).pack(anchor="w")
             
-            for caminho, resultado in self.resultados.items():
+            for caminho, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
                 novos = resultado['novos']
                 if not novos:
                     continue
@@ -376,7 +376,7 @@ class JanelaRelatorio(tk.Toplevel):
             tk.Label(titulo_frame, text=f"⚠️ Desatualizados ({total_desatualizados})", bg=self.bg_principal, 
                     fg=self.cor_desatualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
             
-            for caminho, resultado in self.resultados.items():
+            for caminho, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
                 desatualizados = resultado['desatualizados']
                 if not desatualizados:
                     continue
@@ -398,7 +398,7 @@ class JanelaRelatorio(tk.Toplevel):
             tk.Label(titulo_frame, text=f"✅ Atualizados ({total_atualizados})", bg=self.bg_principal, 
                     fg=self.cor_atualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
             
-            for caminho, resultado in self.resultados.items():
+            for caminho, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
                 atualizados = resultado['atualizados']
                 if not atualizados:
                     continue
@@ -439,7 +439,7 @@ class JanelaRelatorio(tk.Toplevel):
         tk.Label(titulo_frame, text=f"📊 Total: {total_novos} arquivo(s) novo(s)", 
                 bg=self.bg_principal, fg=self.cor_novo, font=("Segoe UI", 10, "bold")).pack(anchor="w")
         
-        for caminho, resultado in self.resultados.items():
+        for caminho, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
             novos = resultado['novos']
             if not novos:
                 continue
@@ -617,7 +617,7 @@ class JanelaRelatorio(tk.Toplevel):
         tk.Label(titulo_frame, text=f"📊 Total: {total_desatualizados} arquivo(s) desatualizado(s)", 
                 bg=self.bg_principal, fg=self.cor_desatualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
         
-        for caminho, resultado in self.resultados.items():
+        for caminho, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
             desatualizados = resultado['desatualizados']
             if not desatualizados:
                 continue
@@ -663,7 +663,7 @@ class JanelaRelatorio(tk.Toplevel):
         tk.Label(titulo_frame, text=f"📊 Total: {total_atualizados} arquivo(s) atualizado(s)", 
                 bg=self.bg_principal, fg=self.cor_atualizado, font=("Segoe UI", 10, "bold")).pack(anchor="w")
         
-        for caminho, resultado in self.resultados.items():
+        for caminho, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
             atualizados = resultado['atualizados']
             if not atualizados:
                 continue

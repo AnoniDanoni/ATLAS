@@ -533,7 +533,9 @@ class JanelaGerenciarPastas(tk.Toplevel):
         self.listbox.delete(0, "end")
         sessao_ativa = self.parent_app.sessao_atual
         pastas = obter_pastas_sessao(self.config, sessao_ativa)
-        for pasta in pastas:
+        # Ordenar pastas alfabeticamente por caminho
+        pastas_ordenadas = sorted(pastas, key=lambda p: p['caminho'].lower())
+        for pasta in pastas_ordenadas:
             self.listbox.insert("end", f"{pasta['caminho']} ({pasta['entrada']} → {pasta['saida']})")
         
         if not pastas:

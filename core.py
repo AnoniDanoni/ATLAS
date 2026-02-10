@@ -96,8 +96,10 @@ def salvar_config(config_completo):
 
 
 def obter_pastas_sessao(config, nome_sessao):
-    """Retorna a lista de pastas de uma sessão específica"""
-    return config['sessoes'].get(nome_sessao, {}).get('pastas', [])
+    """Retorna a lista de pastas de uma sessão específica, ordenadas alfabeticamente"""
+    pastas = config['sessoes'].get(nome_sessao, {}).get('pastas', [])
+    # Ordenar alfabeticamente por caminho (case-insensitive)
+    return sorted(pastas, key=lambda p: p['caminho'].lower())
 
 
 def atualizar_pastas_sessao(config, nome_sessao, pastas):
