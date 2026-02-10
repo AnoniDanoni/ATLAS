@@ -195,6 +195,9 @@ class JanelaRelatorio(tk.Toplevel):
         self._montar_interface()
         self._aplicar_filtros()
         
+        # Recarregar config quando a janela fechar para sincronizar mudanças
+        self.protocol("WM_DELETE_WINDOW", self._ao_fechar)
+        
         self.update_idletasks()
         width = self.winfo_width()
         height = self.winfo_height()
@@ -838,6 +841,11 @@ class JanelaRelatorio(tk.Toplevel):
             messagebox.showerror("Erro", "Para exportar em Excel, instale o pacote openpyxl:\n\npip install openpyxl")
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao exportar relatório:\n{str(e)}")
+    
+    def _ao_fechar(self):
+        """Recarrega config da aplicação pai ao fechar a janela"""
+        self.parent.config = carregar_config()
+        self.destroy()
 
 
 # ==================== INTERFACE PRINCIPAL ====================
@@ -979,6 +987,8 @@ class MonitorApp(tk.Tk):
 
     def _abrir_relatorio(self):
         """Abre janela de relatório"""
+        # Recarregar config do disco para garantir dados atualizados
+        self.config = carregar_config()
         JanelaRelatorio(self, self.config, self.resultados, self.bg_principal, self.bg_secundario, self.fg_texto, self.fg_texto_secundario, 
                        self.filter_novos, self.filter_desatualizados, self.filter_atualizados)
 
@@ -1068,8 +1078,9 @@ class MonitorApp(tk.Tk):
         buttons_inner.pack(anchor="center")
         
         def tarefa_verificacao():
-            # Resetar status_arquivos para nova verificação
+            # Resetar TODOS os status e relatórios para nova verificação limpa
             self.config['status_arquivos'] = {}
+            self.config['relatorios_inaptid'] = {}
             salvar_config(self.config)
             
             self.resultados = verificar_atualizacoes(self.pastas)
