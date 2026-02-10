@@ -417,24 +417,30 @@ class JanelaGerenciarPastas(tk.Toplevel):
         self.bind("<Delete>", self._ao_pressionar_del_global)
 
     def _ao_pressionar_delete_lista(self, event):
-        """Remove pasta selecionada quando DEL é pressionado na listbox"""
-        sel = self.listbox.curselection()
-        if not sel:
+        """Remove pasta(s) selecionada(s) quando DEL é pressionado na listbox"""
+        selecionadas = self.listbox.curselection()
+        if not selecionadas:
             return
         
-        idx = sel[0]
         sessao_ativa = self.parent_app.sessao_atual
         pastas = obter_pastas_sessao(self.config, sessao_ativa)
         
-        if idx >= len(pastas):
+        # Criar mensagem de confirmação
+        qtd_pastas = len(selecionadas)
+        if qtd_pastas == 1:
+            pasta = pastas[selecionadas[0]]
+            msg = f"Remover pasta?\n{pasta['caminho']}"
+        else:
+            msg = f"Remover {qtd_pastas} pastas selecionadas?"
+        
+        if not messagebox.askyesno("Confirmar", msg):
             return
         
-        pasta = pastas[idx]
+        # Remover em ordem reversa para não afetar os índices
+        for idx in reversed(selecionadas):
+            if idx < len(pastas):
+                pastas.pop(idx)
         
-        if not messagebox.askyesno("Confirmar", f"Remover pasta?\n{pasta['caminho']}"):
-            return
-        
-        pastas.pop(idx)
         atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
         salvar_config(self.config)
         self._atualizar_lista()
@@ -481,7 +487,8 @@ class JanelaGerenciarPastas(tk.Toplevel):
         
         self.listbox = tk.Listbox(frame_lista, height=8, yscrollcommand=scrollbar.set, 
                                    relief="flat", borderwidth=0, bg=self.bg_terciario, fg=self.fg_texto,
-                                   selectbackground=self.cor_acento, selectforeground="#ffffff", font=("Segoe UI", 9))
+                                   selectbackground=self.cor_acento, selectforeground="#ffffff", font=("Segoe UI", 9),
+                                   selectmode=tk.EXTENDED)
         self.listbox.pack(side="left", fill="both", expand=True)
         self.listbox.bind("<<ListboxSelect>>", self._ao_selecionar_pasta)
         self.listbox.bind("<Delete>", self._ao_pressionar_delete_lista)
@@ -667,29 +674,57 @@ class JanelaGerenciarPastas(tk.Toplevel):
         messagebox.showinfo("Sucesso", "Pasta adicionada com sucesso!")
 
     def _editar_pasta(self):
-        sel = self.listbox.curselection()
-        if not sel:
-            messagebox.showinfo("Aviso", "Selecione uma pasta para editar")
+        selecionadas = self.listbox.curselection()
+        if not selecionadas:
+            messagebox.showinfo("Aviso", "Selecione uma ou mais pastas para editar")
             return
         
-        idx = sel[0]
-        sessao_ativa = self.parent_app.sessao_atual
-        pastas = obter_pastas_sessao(self.config, sessao_ativa)
-        pasta = pastas[idx]
-        
-        extensoes = self._pedir_extensoes(pasta['entrada'], pasta['saida'])
-        if not extensoes:
-            return
-        
-        pasta['entrada'] = extensoes['entrada']
-        pasta['saida'] = extensoes['saida']
-        
-        atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
-        salvar_config(self.config)
-        self.pastas_modificadas = True
-        self._atualizar_lista()
-        self._ao_selecionar_pasta()
-        messagebox.showinfo("Sucesso", "Pasta atualizada com sucesso!")
+        # Se apenas uma pasta selecionada, editar individual
+        if len(selecionadas) == 1:
+            idx = selecionadas[0]
+            sessao_ativa = self.parent_app.sessao_atual
+            pastas = obter_pastas_sessao(self.config, sessao_ativa)
+            pasta = pastas[idx]
+            
+            extensoes = self._pedir_extensoes(pasta['entrada'], pasta['saida'])
+            if not extensoes:
+                return
+            
+            pasta['entrada'] = extensoes['entrada']
+            pasta['saida'] = extensoes['saida']
+            
+            atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+            salvar_config(self.config)
+            self.pastas_modificadas = True
+            self._atualizar_lista()
+            self._ao_selecionar_pasta()
+            messagebox.showinfo("Sucesso", "Pasta atualizada com sucesso!")
+        else:
+            # Se múltiplas pastas, pedir extensões e aplicar a todas
+            sessao_ativa = self.parent_app.sessao_atual
+            pastas = obter_pastas_sessao(self.config, sessao_ativa)
+            
+            if not messagebox.askyesno("Editar Múltiplas", f"Aplicar as mesmas extensões para {len(selecionadas)} pastas?"):
+                return
+            
+            # Usar extensões da primeira pasta selecionada como padrão
+            primeira_pasta = pastas[selecionadas[0]]
+            extensoes = self._pedir_extensoes(primeira_pasta['entrada'], primeira_pasta['saida'])
+            if not extensoes:
+                return
+            
+            # Aplicar a todas as pastas selecionadas
+            for idx in selecionadas:
+                if idx < len(pastas):
+                    pastas[idx]['entrada'] = extensoes['entrada']
+                    pastas[idx]['saida'] = extensoes['saida']
+            
+            atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+            salvar_config(self.config)
+            self.pastas_modificadas = True
+            self._atualizar_lista()
+            self._ao_selecionar_pasta()
+            messagebox.showinfo("Sucesso", f"✓ {len(selecionadas)} pastas atualizadas com sucesso!")
 
     def _pedir_extensoes(self, entrada_padrao="rvt", saida_padrao="ifc"):
         """Abre diálogo para escolher extensões e salva as preferências"""
