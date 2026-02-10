@@ -207,9 +207,15 @@ class JanelaRelatorio(tk.Toplevel):
         frame_superior = tk.Frame(self, bg=self.bg_secundario)
         frame_superior.pack(fill="x", padx=0, pady=0)
         
-        ttk.Label(frame_superior, text="📊 Relatório de Atualizações", 
+        header_frame = tk.Frame(frame_superior, bg=self.bg_secundario)
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        ttk.Label(header_frame, text="📊 Relatório de Atualizações", 
                  font=("Segoe UI", 12, "bold"), background=self.bg_secundario, 
-                 foreground=self.cor_acento).pack(pady=10)
+                 foreground=self.cor_acento).pack(side="left", pady=10)
+        
+        btn_exportar = ttk.Button(header_frame, text="📥 Exportar CSV", command=self._exportar_csv)
+        btn_exportar.pack(side="right", padx=10)
         
         resumo_frame = tk.Frame(frame_superior, bg=self.bg_principal)
         resumo_frame.pack(fill="x", padx=10, pady=(0, 10))
@@ -683,6 +689,121 @@ class JanelaRelatorio(tk.Toplevel):
                 caminho_arquivo = item['entrada']['caminho']
                 nome_base = item['nome_base']
                 self._adicionar_item_arquivo(self.tab_atualizados._frame_conteudo, nome_arquivo, caminho, caminho_arquivo, nome_base)
+
+    def _exportar_csv(self):
+        """Exporta o relatório para um arquivo Excel (.xlsx) com hiperlinks"""
+        from datetime import datetime
+        
+        # Pedir caminho para salvar o arquivo em Excel
+        caminho_arquivo = filedialog.asksaveasfilename(
+            title="Salvar Relatório como Excel",
+            defaultextension=".xlsx",
+            filetypes=[("Arquivo Excel", "*.xlsx"), ("Todos os arquivos", "*.*")],
+            initialfile=f"relatorio_{datetime.now().strftime('%d_%m_%Y_%H%M%S')}.xlsx"
+        )
+        
+        if not caminho_arquivo:
+            return
+        
+        try:
+            # Garantir que seja .xlsx
+            if not caminho_arquivo.endswith('.xlsx'):
+                caminho_arquivo = caminho_arquivo.replace('.csv', '.xlsx').replace('.xls', '.xlsx')
+                if not caminho_arquivo.endswith('.xlsx'):
+                    caminho_arquivo += '.xlsx'
+            
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Relatório"
+            
+            # Header com estilo
+            headers = ['Modelo', 'Pasta', 'Status', 'Motivo']
+            for col_num, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_num)
+                cell.value = header
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="5865F2", end_color="5865F2", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            
+            # Coletar dados de todos os arquivos
+            row_num = 2
+            
+            for caminho_pasta, resultado in sorted(self.resultados.items(), key=lambda x: x[0].lower()):
+                for tipo_lista, tipo_nome in [('novos', 'Novo'), ('desatualizados', 'Desatualizado'), ('atualizados', 'Atualizado')]:
+                    itens = resultado[tipo_lista]
+                    
+                    for item in itens:
+                        nome_base = item.get('nome_base', '')
+                        caminho_arquivo_item = item['entrada']['caminho']
+                        pasta_arquivo = os.path.dirname(caminho_arquivo_item)  # Pasta onde o arquivo está
+                        status = 'Novo' if tipo_nome == 'Novo' else 'Desatualizado' if tipo_nome == 'Desatualizado' else 'Atualizado'
+                        
+                        # Verificar se existe status salvo
+                        if 'status_arquivos' in self.config and caminho_arquivo_item in self.config['status_arquivos']:
+                            status = self.config['status_arquivos'][caminho_arquivo_item]
+                        
+                        # Obter motivo (relatório) se existir
+                        motivo = ''
+                        if 'relatorios_inaptid' in self.config and caminho_arquivo_item in self.config['relatorios_inaptid']:
+                            motivo = self.config['relatorios_inaptid'][caminho_arquivo_item]
+                        
+                        # Modelo (coluna A)
+                        cell_modelo = ws.cell(row=row_num, column=1)
+                        cell_modelo.value = nome_base
+                        cell_modelo.alignment = Alignment(horizontal="left", vertical="center")
+                        
+                        # Pasta como hiperlink (coluna B)
+                        cell_pasta = ws.cell(row=row_num, column=2)
+                        cell_pasta.value = os.path.basename(pasta_arquivo)  # Mostrar apenas o nome da pasta
+                        
+                        # Criar hiperlink para abrir a pasta
+                        if os.path.exists(pasta_arquivo):
+                            # Converter caminho para file:/// URI
+                            file_uri = 'file:///' + pasta_arquivo.replace('\\', '/').replace(' ', '%20')
+                            cell_pasta.hyperlink = file_uri
+                            cell_pasta.font = Font(underline="single", color="0563C1")
+                        else:
+                            cell_pasta.font = Font(color="808080")
+                        
+                        cell_pasta.alignment = Alignment(horizontal="left", vertical="center")
+                        
+                        # Status (coluna C)
+                        cell_status = ws.cell(row=row_num, column=3)
+                        cell_status.value = status
+                        cell_status.alignment = Alignment(horizontal="center", vertical="center")
+                        
+                        # Motivo (coluna D, com wrap de texto)
+                        cell_motivo = ws.cell(row=row_num, column=4)
+                        cell_motivo.value = motivo
+                        cell_motivo.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+                        
+                        row_num += 1
+            
+            # Ajustar largura das colunas
+            ws.column_dimensions['A'].width = 35
+            ws.column_dimensions['B'].width = 40
+            ws.column_dimensions['C'].width = 15
+            ws.column_dimensions['D'].width = 60
+            
+            # Altura adequada para header
+            ws.row_dimensions[1].height = 25
+            
+            # Auto-ajustar altura das linhas com conteúdo
+            for row in range(2, row_num):
+                ws.row_dimensions[row].height = None
+            
+            # Salvar arquivo
+            wb.save(caminho_arquivo)
+            
+            messagebox.showinfo("Sucesso", f"✓ Relatório exportado com sucesso!\n\n{caminho_arquivo}")
+            
+        except ImportError:
+            messagebox.showerror("Erro", "Para exportar em Excel, instale o pacote openpyxl:\n\npip install openpyxl")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar relatório:\n{str(e)}")
 
 
 # ==================== INTERFACE PRINCIPAL ====================
