@@ -508,6 +508,36 @@ class JanelaRelatorio(tk.Toplevel):
             """Callback quando o status é alterado"""
             status_selecionado = combo.get()
             
+            if status_selecionado == "Ignorar":
+                # Pedir confirmação para ignorar
+                if not messagebox.askyesno("Confirmar", f"Deseja ignorar este arquivo?\n\n{nome_arquivo}\n\nEle será adicionado à lista de ignorados."):
+                    # Resetar o combo se o usuário cancelar
+                    if 'status_arquivos' in self.config and caminho_arquivo in self.config['status_arquivos']:
+                        combo.set(self.config['status_arquivos'][caminho_arquivo])
+                    else:
+                        combo.set("Status")
+                    return
+                
+                # Adicionar às ignorados da pasta mapeada
+                if 'arquivos_ignorados' not in self.config:
+                    self.config['arquivos_ignorados'] = {}
+                if caminho_pasta not in self.config['arquivos_ignorados']:
+                    self.config['arquivos_ignorados'][caminho_pasta] = []
+                
+                # Adicionar o nome base se não estiver já
+                if nome_base not in self.config['arquivos_ignorados'][caminho_pasta]:
+                    self.config['arquivos_ignorados'][caminho_pasta].append(nome_base)
+                
+                # Remover do status_arquivos se existir
+                if 'status_arquivos' in self.config and caminho_arquivo in self.config['status_arquivos']:
+                    del self.config['status_arquivos'][caminho_arquivo]
+                
+                salvar_config(self.config)
+                messagebox.showinfo("Sucesso", f"✓ Arquivo '{nome_arquivo}' adicionado à lista de ignorados!")
+                # Limpar o item da interface atualizando
+                item_frame.pack_forget()
+                return
+            
             # Pegar status anterior ANTES de salvar o novo
             status_anterior = self.config.get('status_arquivos', {}).get(caminho_arquivo)
             
@@ -744,6 +774,10 @@ class JanelaRelatorio(tk.Toplevel):
                         # Verificar se existe status salvo
                         if 'status_arquivos' in self.config and caminho_arquivo_item in self.config['status_arquivos']:
                             status = self.config['status_arquivos'][caminho_arquivo_item]
+                        
+                        # Se status for "Status" (padrão), marcar como "Inalterado"
+                        if status == "Status":
+                            status = "Inalterado"
                         
                         # Obter motivo (relatório) se existir
                         motivo = ''
@@ -1034,6 +1068,10 @@ class MonitorApp(tk.Tk):
         buttons_inner.pack(anchor="center")
         
         def tarefa_verificacao():
+            # Resetar status_arquivos para nova verificação
+            self.config['status_arquivos'] = {}
+            salvar_config(self.config)
+            
             self.resultados = verificar_atualizacoes(self.pastas)
             self.resultados = self._filtrar_ignorados(self.resultados)
 
