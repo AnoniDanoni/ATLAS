@@ -138,7 +138,7 @@ class JanelaSelecaoPastas(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Selecionar Pastas")
-        self.geometry("600x400")
+        self.geometry("600x450")
         self.resizable(False, False)
         self.grab_set()
         self.transient(parent)
@@ -155,8 +155,17 @@ class JanelaSelecaoPastas(tk.Toplevel):
         self._criar_interface()
 
     def _criar_interface(self):
-        ttk.Label(self, text="Pastas Selecionadas:", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.fg_texto).pack(pady=10, padx=10, anchor="w")
+        # Header com instruções
+        header_frame = tk.Frame(self, bg=self.bg_secundario)
+        header_frame.pack(fill="x", pady=(0, 10))
         
+        ttk.Label(header_frame, text="📁 Selecionar Pastas para Monitorar", font=("Segoe UI", 11, "bold"), 
+                 background=self.bg_secundario, foreground=self.cor_acento).pack(pady=8, padx=10, anchor="w")
+        
+        ttk.Label(header_frame, text="Use Ctrl+Click para multiselect e Shift+Click para selecionar um intervalo", 
+                 font=("Segoe UI", 8), background=self.bg_secundario, foreground=self.fg_texto_secundario).pack(pady=(0, 8), padx=10, anchor="w")
+        
+        # Lista de pastas com suporte a multiselect
         frame_lista_border = tk.Frame(self, bg=self.cor_acento)
         frame_lista_border.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
@@ -166,9 +175,10 @@ class JanelaSelecaoPastas(tk.Toplevel):
         scrollbar = ttk.Scrollbar(frame_lista)
         scrollbar.pack(side="right", fill="y")
 
+        # selectmode=tk.EXTENDED permite Ctrl+Click e Shift+Click para multiselect
         self.listbox = tk.Listbox(frame_lista, height=15, yscrollcommand=scrollbar.set, relief="flat", borderwidth=0, 
                                    bg=self.bg_terciario, fg=self.fg_texto, selectbackground=self.cor_acento, 
-                                   selectforeground="#ffffff", font=("Segoe UI", 9))
+                                   selectforeground="#ffffff", font=("Segoe UI", 9), selectmode=tk.EXTENDED)
         self.listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.listbox.yview)
 
@@ -176,7 +186,7 @@ class JanelaSelecaoPastas(tk.Toplevel):
         frame_botoes.pack(pady=10)
 
         ttk.Button(frame_botoes, text="➕ Adicionar Pasta", command=self._adicionar_pasta, width=20).grid(row=0, column=0, padx=5)
-        ttk.Button(frame_botoes, text="➖ Remover Selecionada", command=self._remover_pasta, width=20).grid(row=0, column=1, padx=5)
+        ttk.Button(frame_botoes, text="➖ Remover Selecionada(s)", command=self._remover_pasta, width=20).grid(row=0, column=1, padx=5)
         ttk.Button(frame_botoes, text="✓ Confirmar", command=self._confirmar, width=20).grid(row=1, column=0, padx=5, pady=5)
         ttk.Button(frame_botoes, text="✗ Cancelar", command=self.destroy, width=20).grid(row=1, column=1, padx=5, pady=5)
 
@@ -187,13 +197,17 @@ class JanelaSelecaoPastas(tk.Toplevel):
             self.listbox.insert("end", caminho)
 
     def _remover_pasta(self):
-        sel = self.listbox.curselection()
-        if sel:
-            idx = sel[0]
-            self.listbox.delete(idx)
-            self.pastas_selecionadas.pop(idx)
+        # Remover todas as pastas selecionadas (suporta multiselect)
+        selecionadas = self.listbox.curselection()
+        if selecionadas:
+            # Remover em ordem reversa para não afetar os índices
+            for idx in reversed(selecionadas):
+                self.listbox.delete(idx)
+                self.pastas_selecionadas.pop(idx)
 
     def _confirmar(self):
+        # Atualizar pastas_selecionadas com base no que está na listbox
+        self.pastas_selecionadas = list(self.listbox.get(0, "end"))
         self.destroy()
 
 
@@ -678,14 +692,19 @@ class JanelaGerenciarPastas(tk.Toplevel):
         messagebox.showinfo("Sucesso", "Pasta atualizada com sucesso!")
 
     def _pedir_extensoes(self, entrada_padrao="rvt", saida_padrao="ifc"):
-        """Abre diálogo para escolher extensões"""
+        """Abre diálogo para escolher extensões e salva as preferências"""
         dialog = tk.Toplevel(self)
         dialog.title("Escolher Extensões")
-        dialog.geometry("350x250")
+        dialog.geometry("350x280")
         dialog.resizable(False, False)
         dialog.grab_set()
         dialog.transient(self)
         dialog.configure(bg=self.bg_principal)
+        
+        # Usar últimas extensões salvas se disponíveis
+        if 'ultimas_extensoes' in self.config:
+            entrada_padrao = self.config['ultimas_extensoes'].get('entrada', entrada_padrao)
+            saida_padrao = self.config['ultimas_extensoes'].get('saida', saida_padrao)
         
         ttk.Label(dialog, text="Extensões", font=("Segoe UI", 11, "bold"), background=self.bg_principal, foreground=self.cor_acento).pack(pady=10)
         
@@ -706,6 +725,15 @@ class JanelaGerenciarPastas(tk.Toplevel):
         
         def confirmar():
             resultado[0] = {'entrada': entrada_var.get(), 'saida': saida_var.get()}
+            
+            # Salvar as últimas extensões escolhidas
+            if 'ultimas_extensoes' not in self.config:
+                self.config['ultimas_extensoes'] = {}
+            
+            self.config['ultimas_extensoes']['entrada'] = entrada_var.get()
+            self.config['ultimas_extensoes']['saida'] = saida_var.get()
+            salvar_config(self.config)
+            
             dialog.destroy()
         
         btn_frame = tk.Frame(dialog, bg=self.bg_principal)

@@ -518,15 +518,9 @@ class JanelaRelatorio(tk.Toplevel):
                     del self.config['relatorios_inaptid'][caminho_arquivo]
                     salvar_config(self.config)
                 
-                # Abre a janela de relatório
-                JanelaRelatorioArquivo(self, nome_arquivo, caminho_arquivo, self.config, 
-                                     self.bg_principal, self.bg_secundario, self.fg_texto, 
-                                     self.fg_texto_secundario, btn_relatorio, combo)
-                
-                # Atualizar visibilidade do botão de relatório
-                if 'relatorios_inaptid' in self.config and caminho_arquivo in self.config['relatorios_inaptid']:
-                    if btn_relatorio.winfo_ismapped() == 0:  # Se não está visível
-                        btn_relatorio.pack(side="left", padx=2, pady=3)
+                # Mostrar o botão de relatório como opcional
+                if btn_relatorio.winfo_ismapped() == 0:  # Se não está visível
+                    btn_relatorio.pack(side="left", padx=2, pady=3)
             else:
                 # Se mudou de Inapto para outra coisa, esconder o botão de relatório
                 if btn_relatorio.winfo_ismapped():
