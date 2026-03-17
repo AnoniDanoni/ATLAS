@@ -298,6 +298,7 @@ class JanelaRelatorio(tk.Toplevel):
         tab_frame._canvas = canvas
         tab_frame._frame_conteudo = frame_conteudo
         tab_frame._canvas_window = canvas_window
+        tab_frame._bind_mousewheel = _bind_mousewheel
 
     def _criar_label_selecionavel(self, parent, texto, bg, fg, font_spec, padx=5, pady=3):
         """Cria um widget de texto selecionável sem bordas, estilizado como label"""
@@ -340,6 +341,9 @@ class JanelaRelatorio(tk.Toplevel):
         self._preencher_aba_novos(filtros)
         self._preencher_aba_desatualizados(filtros)
         self._preencher_aba_atualizados(filtros)
+
+        for tab in (self.tab_todos, self.tab_novos, self.tab_desatualizados, self.tab_atualizados):
+            tab._bind_mousewheel(tab._frame_conteudo)
 
     def _preencher_aba_todos(self, filtros):
         """Preenche a aba de todos os resultados com dropdown para cada arquivo"""
