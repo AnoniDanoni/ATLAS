@@ -778,6 +778,11 @@ class JanelaRelatorio(tk.Toplevel):
                         if 'status_arquivos' in self.config and caminho_arquivo_item in self.config['status_arquivos']:
                             status = self.config['status_arquivos'][caminho_arquivo_item]
                         
+                        # Excluir do relatório arquivos que estão na aba de atualizados
+                        # sem status definido manualmente pelo usuário
+                        if tipo_lista == 'atualizados' and caminho_arquivo_item not in self.config.get('status_arquivos', {}):
+                            continue
+                        
                         # Se status for "Status" (padrão), marcar como "Inalterado"
                         if status == "Status":
                             status = "Inalterado"
