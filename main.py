@@ -173,7 +173,8 @@ class JanelaRelatorio(tk.Toplevel):
         self.geometry("1000x700")
         self.configure(bg=bg_principal)
         self.resizable(True, True)
-        self.grab_set()
+        self.attributes('-topmost', True)
+        self.after_idle(self.attributes, '-topmost', False)
         
         self.parent = parent
         self.config = config
@@ -293,7 +294,6 @@ class JanelaRelatorio(tk.Toplevel):
         _bind_mousewheel(frame_conteudo)
         canvas.bind("<MouseWheel>", ao_scroll_mouse, add="+")
         tab_frame.bind("<MouseWheel>", ao_scroll_mouse, add="+")
-        tab_frame.bind_all("<MouseWheel>", ao_scroll_mouse, add="+") if hasattr(tab_frame, 'bind_all') else None
         
         tab_frame._canvas = canvas
         tab_frame._frame_conteudo = frame_conteudo
@@ -893,6 +893,9 @@ class MonitorApp(tk.Tk):
 
         self._montar_interface()
         
+        # Configurar handler para fechar a janela
+        self.protocol("WM_DELETE_WINDOW", self._ao_fechar_aplicacao)
+        
         self.log_console(f"📁 Configurações salvas em: {DIRETORIO_ATLAS}")
         self.log_console(f"📄 Arquivo: {os.path.basename(CONFIG_FILE)}\n")
     
@@ -1000,6 +1003,11 @@ class MonitorApp(tk.Tk):
     def log_console(self, msg: str):
         """Log de mensagens no console"""
         print(msg)
+
+    def _ao_fechar_aplicacao(self):
+        """Handler para quando a janela principal é fechada"""
+        if messagebox.askyesno("Confirmar Saída", "Tem certeza que deseja fechar o ATLAS?"):
+            self.destroy()
 
     def rodar_em_thread(self, func):
         threading.Thread(target=func, daemon=True).start()
