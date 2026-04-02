@@ -152,6 +152,7 @@ class JanelaSelecaoPastas(tk.Toplevel):
         
         self.configure(bg=self.bg_principal)
         self.pastas_selecionadas = []
+        self._last_dir = None
         self._criar_interface()
 
     def _criar_interface(self):
@@ -191,8 +192,9 @@ class JanelaSelecaoPastas(tk.Toplevel):
         ttk.Button(frame_botoes, text="✗ Cancelar", command=self.destroy, width=20).grid(row=1, column=1, padx=5, pady=5)
 
     def _adicionar_pasta(self):
-        caminho = filedialog.askdirectory(title="Selecione uma pasta")
+        caminho = filedialog.askdirectory(title="Selecione uma pasta", initialdir=self._last_dir)
         if caminho and caminho not in self.pastas_selecionadas:
+            self._last_dir = os.path.dirname(caminho)
             self.pastas_selecionadas.append(caminho)
             self.listbox.insert("end", caminho)
 
@@ -410,6 +412,7 @@ class JanelaGerenciarPastas(tk.Toplevel):
         self.cor_acento = "#5865F2"
         
         self.configure(bg=self.bg_principal)
+        self._last_dir = None
         
         self._criar_interface()
         self._atualizar_lista()
@@ -647,9 +650,10 @@ class JanelaGerenciarPastas(tk.Toplevel):
         self.botoes_ignorados[arquivo] = btn
 
     def _adicionar_pasta(self):
-        caminho = filedialog.askdirectory(title="Selecione uma pasta para monitorar")
+        caminho = filedialog.askdirectory(title="Selecione uma pasta para monitorar", initialdir=self._last_dir)
         if not caminho:
             return
+        self._last_dir = os.path.dirname(caminho)
         
         sessao_ativa = self.parent_app.sessao_atual
         pastas = obter_pastas_sessao(self.config, sessao_ativa)
