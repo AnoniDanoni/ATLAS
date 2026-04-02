@@ -337,15 +337,19 @@ def verificar_atualizacoes(pastas_config):
     """
     Verifica atualizações de arquivos nas pastas configuradas.
     Compara timestamps de entrada e saída.
+    Se 'pasta_saida' estiver definida na configuração, busca os arquivos de saída lá.
     """
     resultados_por_pasta = {}
     for config in pastas_config:
         caminho = config['caminho']
         entrada_ext = config['entrada']
         saida_ext = config['saida']
+        
+        # Se pasta_saida estiver definida, usar para buscar arquivos de saída
+        caminho_saida = config.get('pasta_saida', caminho)
 
         arquivos_entrada = escanear_pasta(caminho, entrada_ext)
-        arquivos_saida = escanear_pasta(caminho, saida_ext)
+        arquivos_saida = escanear_pasta(caminho_saida, saida_ext)
 
         desatualizados = []
         novos = []

@@ -495,6 +495,7 @@ class JanelaGerenciarPastas(tk.Toplevel):
         self.listbox.pack(side="left", fill="both", expand=True)
         self.listbox.bind("<<ListboxSelect>>", self._ao_selecionar_pasta)
         self.listbox.bind("<Delete>", self._ao_pressionar_delete_lista)
+        self.listbox.bind("<Button-3>", self._exibir_menu_contexto)
         scrollbar.config(command=self.listbox.yview)
         
         frame_ignorados_label = tk.Frame(self, bg=self.bg_principal)
@@ -539,7 +540,11 @@ class JanelaGerenciarPastas(tk.Toplevel):
         # Ordenar pastas alfabeticamente por caminho
         pastas_ordenadas = sorted(pastas, key=lambda p: p['caminho'].lower())
         for pasta in pastas_ordenadas:
-            self.listbox.insert("end", f"{pasta['caminho']} ({pasta['entrada']} → {pasta['saida']})")
+            # Mostrar indicador de pasta de saída customizada se existir
+            pasta_saida_label = ""
+            if 'pasta_saida' in pasta and pasta['pasta_saida']:
+                pasta_saida_label = " ⚙️"
+            self.listbox.insert("end", f"{pasta['caminho']} ({pasta['entrada']} → {pasta['saida']}){pasta_saida_label}")
         
         if not pastas:
             self._limpar_botoes_ignorados()
@@ -785,6 +790,111 @@ class JanelaGerenciarPastas(tk.Toplevel):
         
         self.wait_window(dialog)
         return resultado[0]
+
+    def _exibir_menu_contexto(self, event):
+        """Exibe um menu de contexto ao clicar com botão direito na listbox"""
+        # Selecionar o item clicado
+        idx = self.listbox.nearest(event.y)
+        if idx < 0:
+            return
+        
+        self.listbox.selection_clear(0, "end")
+        self.listbox.selection_set(idx)
+        self.listbox.activate(idx)
+        
+        # Criar menu de contexto
+        menu = tk.Menu(self, tearoff=False, bg=self.bg_terciario, fg=self.fg_texto, 
+                      activebackground=self.cor_acento, activeforeground="#ffffff")
+        
+        # Adicionar ou Remover pasta de saída baseado em se já existe
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        
+        if idx < len(pastas):
+            pasta = pastas[idx]
+            
+            if 'pasta_saida' in pasta and pasta['pasta_saida']:
+                menu.add_command(label="🔄 Alterar pasta de saída", 
+                                command=lambda: self._definir_pasta_saida(idx))
+                menu.add_command(label="🗑 Remover pasta de saída", 
+                                command=lambda: self._limpar_pasta_saida(idx))
+            else:
+                menu.add_command(label="⚙️ Definir pasta de saída", 
+                                command=lambda: self._definir_pasta_saida(idx))
+            
+            menu.add_separator()
+            menu.add_command(label="✏️ Editar extensões", 
+                            command=self._editar_pasta)
+            menu.add_command(label="🗑 Remover pasta", 
+                            command=self._ao_pressionar_delete_lista)
+        
+        # Exibir o menu
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _definir_pasta_saida(self, idx):
+        """Define uma pasta de saída custom para a pasta monitorada"""
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        
+        if idx < 0 or idx >= len(pastas):
+            messagebox.showerror("Erro", "Pasta inválida selecionada!")
+            return
+        
+        pasta = pastas[idx]
+        pasta_monitorada = pasta['caminho']
+        
+        # Diálogo para selecionar pasta de saída
+        pasta_saida = filedialog.askdirectory(
+            title=f"Selecione a pasta de saída para:\n{pasta_monitorada}",
+            initialdir=pasta.get('pasta_saida', pasta_monitorada)
+        )
+        
+        if not pasta_saida:
+            return
+        
+        # Validar se é uma pasta válida
+        if not os.path.isdir(pasta_saida):
+            messagebox.showerror("Erro", "Pasta selecionada não é válida!")
+            return
+        
+        # Atualizar configuração
+        pasta['pasta_saida'] = pasta_saida
+        atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+        salvar_config(self.config)
+        self.pastas_modificadas = True
+        
+        self._atualizar_lista()
+        self._ao_selecionar_pasta()
+        messagebox.showinfo("Sucesso", f"Pasta de saída definida para:\n{pasta_saida}")
+
+    def _limpar_pasta_saida(self, idx):
+        """Remove a pasta de saída customizada"""
+        sessao_ativa = self.parent_app.sessao_atual
+        pastas = obter_pastas_sessao(self.config, sessao_ativa)
+        
+        if idx < 0 or idx >= len(pastas):
+            messagebox.showerror("Erro", "Pasta inválida selecionada!")
+            return
+        
+        pasta = pastas[idx]
+        
+        if not messagebox.askyesno("Confirmar", "Remover pasta de saída customizada?"):
+            return
+        
+        # Remover campo pasta_saida
+        if 'pasta_saida' in pasta:
+            del pasta['pasta_saida']
+        
+        atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
+        salvar_config(self.config)
+        self.pastas_modificadas = True
+        
+        self._atualizar_lista()
+        self._ao_selecionar_pasta()
+        messagebox.showinfo("Sucesso", "Pasta de saída removida!")
 
     def _fechar(self):
         if self.pastas_modificadas:
