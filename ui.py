@@ -793,108 +793,152 @@ class JanelaGerenciarPastas(tk.Toplevel):
 
     def _exibir_menu_contexto(self, event):
         """Exibe um menu de contexto ao clicar com botão direito na listbox"""
-        # Selecionar o item clicado
         idx = self.listbox.nearest(event.y)
         if idx < 0:
             return
-        
-        self.listbox.selection_clear(0, "end")
-        self.listbox.selection_set(idx)
-        self.listbox.activate(idx)
-        
+
+        # Se o item clicado não está na seleção atual, seleciona apenas ele
+        selecao_atual = set(self.listbox.curselection())
+        if idx not in selecao_atual:
+            self.listbox.selection_clear(0, "end")
+            self.listbox.selection_set(idx)
+            self.listbox.activate(idx)
+            indices_selecionados = [idx]
+        else:
+            indices_selecionados = sorted(selecao_atual)
+
         # Criar menu de contexto
-        menu = tk.Menu(self, tearoff=False, bg=self.bg_terciario, fg=self.fg_texto, 
+        menu = tk.Menu(self, tearoff=False, bg=self.bg_terciario, fg=self.fg_texto,
                       activebackground=self.cor_acento, activeforeground="#ffffff")
-        
-        # Adicionar ou Remover pasta de saída baseado em se já existe
+
         sessao_ativa = self.parent_app.sessao_atual
         pastas = obter_pastas_sessao(self.config, sessao_ativa)
-        
-        if idx < len(pastas):
-            pasta = pastas[idx]
-            
-            if 'pasta_saida' in pasta and pasta['pasta_saida']:
-                menu.add_command(label="🔄 Alterar pasta de saída", 
-                                command=lambda: self._definir_pasta_saida(idx))
-                menu.add_command(label="🗑 Remover pasta de saída", 
-                                command=lambda: self._limpar_pasta_saida(idx))
+
+        indices_validos = [i for i in indices_selecionados if i < len(pastas)]
+        if not indices_validos:
+            return
+
+        multiplos = len(indices_validos) > 1
+        algum_com_saida = any(
+            pastas[i].get('pasta_saida') for i in indices_validos
+        )
+        todos_com_saida = all(
+            pastas[i].get('pasta_saida') for i in indices_validos
+        )
+
+        if multiplos:
+            menu.add_command(
+                label=f"⚙️ Definir pasta de saída para {len(indices_validos)} pastas",
+                command=lambda idxs=indices_validos: self._definir_pasta_saida(idxs)
+            )
+            if algum_com_saida:
+                menu.add_command(
+                    label=f"🗑 Remover pasta de saída das selecionadas",
+                    command=lambda idxs=indices_validos: self._limpar_pasta_saida(idxs)
+                )
+        else:
+            pasta = pastas[indices_validos[0]]
+            if pasta.get('pasta_saida'):
+                menu.add_command(label="🔄 Alterar pasta de saída",
+                                command=lambda idxs=indices_validos: self._definir_pasta_saida(idxs))
+                menu.add_command(label="🗑 Remover pasta de saída",
+                                command=lambda idxs=indices_validos: self._limpar_pasta_saida(idxs))
             else:
-                menu.add_command(label="⚙️ Definir pasta de saída", 
-                                command=lambda: self._definir_pasta_saida(idx))
-            
+                menu.add_command(label="⚙️ Definir pasta de saída",
+                                command=lambda idxs=indices_validos: self._definir_pasta_saida(idxs))
+
             menu.add_separator()
-            menu.add_command(label="✏️ Editar extensões", 
+            menu.add_command(label="✏️ Editar extensões",
                             command=self._editar_pasta)
-            menu.add_command(label="🗑 Remover pasta", 
+            menu.add_command(label="🗑 Remover pasta",
                             command=self._ao_pressionar_delete_lista)
-        
+
         # Exibir o menu
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()
 
-    def _definir_pasta_saida(self, idx):
-        """Define uma pasta de saída custom para a pasta monitorada"""
+    def _definir_pasta_saida(self, indices):
+        """Define uma pasta de saída custom para uma ou mais pastas monitoradas"""
+        if isinstance(indices, int):
+            indices = [indices]
+
         sessao_ativa = self.parent_app.sessao_atual
         pastas = obter_pastas_sessao(self.config, sessao_ativa)
-        
-        if idx < 0 or idx >= len(pastas):
+
+        indices_validos = [i for i in indices if 0 <= i < len(pastas)]
+        if not indices_validos:
             messagebox.showerror("Erro", "Pasta inválida selecionada!")
             return
-        
-        pasta = pastas[idx]
-        pasta_monitorada = pasta['caminho']
-        
-        # Diálogo para selecionar pasta de saída
+
+        # Usar a primeira pasta como referência para o diálogo
+        pasta_ref = pastas[indices_validos[0]]
+        if len(indices_validos) == 1:
+            titulo = f"Selecione a pasta de saída para:\n{pasta_ref['caminho']}"
+        else:
+            titulo = f"Selecione a pasta de saída para {len(indices_validos)} pastas selecionadas"
+
         pasta_saida = filedialog.askdirectory(
-            title=f"Selecione a pasta de saída para:\n{pasta_monitorada}",
-            initialdir=pasta.get('pasta_saida', pasta_monitorada)
+            title=titulo,
+            initialdir=pasta_ref.get('pasta_saida', pasta_ref['caminho'])
         )
-        
+
         if not pasta_saida:
             return
-        
-        # Validar se é uma pasta válida
+
         if not os.path.isdir(pasta_saida):
             messagebox.showerror("Erro", "Pasta selecionada não é válida!")
             return
-        
-        # Atualizar configuração
-        pasta['pasta_saida'] = pasta_saida
+
+        for i in indices_validos:
+            pastas[i]['pasta_saida'] = pasta_saida
+
         atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
         salvar_config(self.config)
         self.pastas_modificadas = True
-        
+
         self._atualizar_lista()
         self._ao_selecionar_pasta()
-        messagebox.showinfo("Sucesso", f"Pasta de saída definida para:\n{pasta_saida}")
+        if len(indices_validos) == 1:
+            messagebox.showinfo("Sucesso", f"Pasta de saída definida para:\n{pasta_saida}")
+        else:
+            messagebox.showinfo("Sucesso", f"Pasta de saída definida para {len(indices_validos)} pastas:\n{pasta_saida}")
 
-    def _limpar_pasta_saida(self, idx):
-        """Remove a pasta de saída customizada"""
+    def _limpar_pasta_saida(self, indices):
+        """Remove a pasta de saída customizada de uma ou mais pastas"""
+        if isinstance(indices, int):
+            indices = [indices]
+
         sessao_ativa = self.parent_app.sessao_atual
         pastas = obter_pastas_sessao(self.config, sessao_ativa)
-        
-        if idx < 0 or idx >= len(pastas):
+
+        indices_validos = [i for i in indices if 0 <= i < len(pastas)]
+        if not indices_validos:
             messagebox.showerror("Erro", "Pasta inválida selecionada!")
             return
-        
-        pasta = pastas[idx]
-        
-        if not messagebox.askyesno("Confirmar", "Remover pasta de saída customizada?"):
+
+        if len(indices_validos) == 1:
+            msg = "Remover pasta de saída customizada?"
+        else:
+            msg = f"Remover pasta de saída de {len(indices_validos)} pastas selecionadas?"
+
+        if not messagebox.askyesno("Confirmar", msg):
             return
-        
-        # Remover campo pasta_saida
-        if 'pasta_saida' in pasta:
-            del pasta['pasta_saida']
-        
+
+        for i in indices_validos:
+            pastas[i].pop('pasta_saida', None)
+
         atualizar_pastas_sessao(self.config, sessao_ativa, pastas)
         salvar_config(self.config)
         self.pastas_modificadas = True
-        
+
         self._atualizar_lista()
         self._ao_selecionar_pasta()
-        messagebox.showinfo("Sucesso", "Pasta de saída removida!")
+        if len(indices_validos) == 1:
+            messagebox.showinfo("Sucesso", "Pasta de saída removida!")
+        else:
+            messagebox.showinfo("Sucesso", f"Pasta de saída removida de {len(indices_validos)} pastas!")
 
     def _fechar(self):
         if self.pastas_modificadas:
