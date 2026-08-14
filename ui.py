@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 import os
 import copy
+import json
 from datetime import datetime
 
 from core import (
@@ -219,7 +220,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
     def __init__(self, parent, config, bg_principal="#36393F", bg_secundario="#2F3136", fg_texto="#FFFFFF", fg_texto_secundario="#B9BBBE"):
         super().__init__(parent)
         self.title("Gerenciar Sessões")
-        self.geometry("500x450")
+        self.geometry("500x510")
         self.resizable(False, False)
         self.grab_set()
         self.transient(parent)
@@ -227,6 +228,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
         self.parent_app = parent
         self.config = config
         self.sessao_modificada = False
+        self.sessoes_exibidas = []
         
         self.bg_principal = bg_principal
         self.bg_secundario = bg_secundario
@@ -268,15 +270,150 @@ class JanelaGerenciarSessoes(tk.Toplevel):
         ttk.Button(frame_botoes, text="✏️ Renomear", command=self._renomear_sessao, width=18).grid(row=0, column=1, padx=4, pady=3)
         ttk.Button(frame_botoes, text="📋 Duplicar", command=self._duplicar_sessao, width=18).grid(row=1, column=0, padx=4, pady=3)
         ttk.Button(frame_botoes, text="🗑 Excluir", command=self._excluir_sessao, width=18).grid(row=1, column=1, padx=4, pady=3)
-        ttk.Button(frame_botoes, text="✓ Fechar", command=self._fechar, width=37).grid(row=2, column=0, columnspan=2, padx=4, pady=10)
+        ttk.Button(frame_botoes, text="Exportar Sessão", command=self._exportar_sessao, width=18).grid(row=2, column=0, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="Importar Sessão", command=self._importar_sessao, width=18).grid(row=2, column=1, padx=4, pady=3)
+        ttk.Button(frame_botoes, text="✓ Fechar", command=self._fechar, width=37).grid(row=3, column=0, columnspan=2, padx=4, pady=10)
 
     def _atualizar_lista(self):
         self.listbox.delete(0, "end")
         sessao_ativa = self.config['sessao_ativa']
-        for nome_sessao in sorted(self.config['sessoes'].keys()):
+        self.sessoes_exibidas = sorted(self.config['sessoes'].keys())
+        for nome_sessao in self.sessoes_exibidas:
             qtd_pastas = len(self.config['sessoes'][nome_sessao]['pastas'])
             marcador = "★" if nome_sessao == sessao_ativa else "  "
             self.listbox.insert("end", f"{marcador} {nome_sessao} ({qtd_pastas} pasta(s))")
+
+    def _obter_sessao_selecionada(self, acao):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Aviso", f"Selecione uma sessão para {acao}")
+            return None
+
+        idx = sel[0]
+        if idx >= len(self.sessoes_exibidas):
+            messagebox.showerror("Erro", "Sessão selecionada invalida.")
+            return None
+
+        return self.sessoes_exibidas[idx]
+
+    def _nome_arquivo_sessao(self, nome_sessao):
+        seguro = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in nome_sessao).strip()
+        return f"atlas_sessao_{seguro or 'sessao'}.json"
+
+    def _validar_pastas_importadas(self, pastas):
+        if not isinstance(pastas, list):
+            raise ValueError("A sessão importada nao possui uma lista de pastas valida.")
+
+        pastas_validas = []
+        for idx, pasta in enumerate(pastas, start=1):
+            if not isinstance(pasta, dict):
+                raise ValueError(f"Pasta #{idx} inválida no arquivo importado.")
+
+            caminho = pasta.get("caminho")
+            entrada = pasta.get("entrada")
+            saida = pasta.get("saida")
+            if not caminho or not entrada or not saida:
+                raise ValueError(f"Pasta #{idx} esta sem caminho, entrada ou saida.")
+
+            pasta_validada = {
+                "caminho": caminho,
+                "entrada": entrada,
+                "saida": saida
+            }
+            if pasta.get("pasta_saida"):
+                pasta_validada["pasta_saida"] = pasta["pasta_saida"]
+
+            pastas_validas.append(pasta_validada)
+
+        return pastas_validas
+
+    def _exportar_sessao(self):
+        nome_sessao = self._obter_sessao_selecionada("exportar")
+        if not nome_sessao:
+            return
+
+        destino = filedialog.asksaveasfilename(
+            parent=self,
+            title="Exportar sessao do ATLAS",
+            defaultextension=".json",
+            filetypes=[("Sessao ATLAS", "*.json"), ("Todos os arquivos", "*.*")],
+            initialfile=self._nome_arquivo_sessao(nome_sessao)
+        )
+        if not destino:
+            return
+
+        dados = {
+            "atlas_session_export": 1,
+            "nome_sessao": nome_sessao,
+            "exportado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "sessao": copy.deepcopy(self.config['sessoes'][nome_sessao])
+        }
+
+        try:
+            with open(destino, "w", encoding="utf-8") as f:
+                json.dump(dados, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Nao foi possivel exportar a sessao:\n{e}")
+            return
+
+        messagebox.showinfo("Sucesso", f"Sessao '{nome_sessao}' exportada com sucesso!")
+
+    def _importar_sessao(self):
+        origem = filedialog.askopenfilename(
+            parent=self,
+            title="Importar sessao do ATLAS",
+            filetypes=[("Sessao ATLAS", "*.json"), ("Todos os arquivos", "*.*")]
+        )
+        if not origem:
+            return
+
+        try:
+            with open(origem, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+
+            if dados.get("atlas_session_export") == 1:
+                nome_sessao = str(dados.get("nome_sessao") or "Sessao importada").strip()
+                sessao = dados.get("sessao", {})
+            elif "sessoes" in dados:
+                nome_sessao = str(dados.get("sessao_ativa") or next(iter(dados["sessoes"]))).strip()
+                sessao = dados["sessoes"][nome_sessao]
+            else:
+                raise ValueError("Arquivo nao parece ser uma sessao exportada pelo ATLAS.")
+
+            pastas = self._validar_pastas_importadas(sessao.get("pastas", []))
+            if not nome_sessao:
+                nome_sessao = "Sessao importada"
+
+            nome_final = nome_sessao
+            if nome_final in self.config['sessoes']:
+                substituir = messagebox.askyesno(
+                    "Sessao existente",
+                    f"Ja existe uma sessao chamada '{nome_final}'.\n\nDeseja substituir?"
+                )
+                if not substituir:
+                    base = nome_final
+                    contador = 2
+                    while nome_final in self.config['sessoes']:
+                        nome_final = f"{base} ({contador})"
+                        contador += 1
+
+            self.config['sessoes'][nome_final] = {
+                "data_criacao": sessao.get("data_criacao", datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
+                "ultima_modificacao": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                "pastas": pastas
+            }
+            self.config['sessao_ativa'] = nome_final
+            self.sessao_modificada = True
+            salvar_config(self.config)
+            self.parent_app.sessao_atual = nome_final
+            self.parent_app.carregar_sessao_ativa()
+            self._atualizar_lista()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Nao foi possivel importar a sessao:\n{e}")
+            return
+
+        messagebox.showinfo("Sucesso", f"Sessao importada como '{nome_final}'.")
 
     def _nova_sessao(self):
         nome = simpledialog.askstring("Nova Sessão", "Nome da nova sessão:", parent=self)
@@ -302,8 +439,9 @@ class JanelaGerenciarSessoes(tk.Toplevel):
             messagebox.showinfo("Aviso", "Selecione uma sessão para renomear")
             return
         
-        idx = sel[0]
-        nome_antigo = list(self.config['sessoes'].keys())[idx]
+        nome_antigo = self._obter_sessao_selecionada("renomear")
+        if not nome_antigo:
+            return
         
         novo_nome = simpledialog.askstring("Renomear Sessão", 
                                             f"Novo nome para '{nome_antigo}':", 
@@ -332,8 +470,9 @@ class JanelaGerenciarSessoes(tk.Toplevel):
             messagebox.showinfo("Aviso", "Selecione uma sessão para duplicar")
             return
         
-        idx = sel[0]
-        nome_original = list(self.config['sessoes'].keys())[idx]
+        nome_original = self._obter_sessao_selecionada("duplicar")
+        if not nome_original:
+            return
         
         novo_nome = simpledialog.askstring("Duplicar Sessão", 
                                             f"Nome para a cópia de '{nome_original}':",
@@ -360,8 +499,9 @@ class JanelaGerenciarSessoes(tk.Toplevel):
             messagebox.showinfo("Aviso", "Selecione uma sessão para excluir")
             return
         
-        idx = sel[0]
-        nome = list(self.config['sessoes'].keys())[idx]
+        nome = self._obter_sessao_selecionada("excluir")
+        if not nome:
+            return
         
         if len(self.config['sessoes']) == 1:
             messagebox.showerror("Erro", "Não é possível excluir a última sessão!")
