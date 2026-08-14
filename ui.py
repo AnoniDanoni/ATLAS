@@ -300,6 +300,50 @@ class JanelaGerenciarSessoes(tk.Toplevel):
         seguro = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in nome_sessao).strip()
         return f"atlas_sessao_{seguro or 'sessao'}.json"
 
+    def _normalizar_user_export_path(self, caminho):
+        if not isinstance(caminho, str):
+            return caminho
+
+        userprofile = os.path.normpath(os.environ.get("USERPROFILE", ""))
+        caminho_norm = os.path.normpath(caminho)
+        if userprofile and caminho_norm.lower() == userprofile.lower():
+            return "%USERPROFILE%"
+        if userprofile and caminho_norm.lower().startswith(userprofile.lower() + os.sep):
+            return "%USERPROFILE%" + caminho_norm[len(userprofile):]
+
+        return caminho
+
+    def _resolver_user_import_path(self, caminho):
+        if not isinstance(caminho, str):
+            return caminho
+
+        userprofile = os.path.normpath(os.environ.get("USERPROFILE", ""))
+        if not userprofile:
+            return caminho
+
+        caminho_norm = os.path.normpath(caminho)
+        if caminho_norm.upper() == "%USERPROFILE%":
+            return userprofile
+
+        marcador = "%USERPROFILE%" + os.sep
+        if caminho_norm.upper().startswith(marcador.upper()):
+            restante = caminho_norm[len("%USERPROFILE%"):].lstrip("\\/")
+            return os.path.join(userprofile, restante)
+
+        partes = caminho_norm.split(os.sep)
+        if len(partes) >= 3 and partes[0].lower().endswith(":") and partes[1].lower() == "users":
+            return os.path.join(userprofile, *partes[3:])
+
+        return caminho
+
+    def _normalizar_sessao_exportada(self, sessao):
+        sessao_exportada = copy.deepcopy(sessao)
+        for pasta in sessao_exportada.get("pastas", []):
+            pasta["caminho"] = self._normalizar_user_export_path(pasta.get("caminho"))
+            if pasta.get("pasta_saida"):
+                pasta["pasta_saida"] = self._normalizar_user_export_path(pasta.get("pasta_saida"))
+        return sessao_exportada
+
     def _validar_pastas_importadas(self, pastas):
         if not isinstance(pastas, list):
             raise ValueError("A sessão importada nao possui uma lista de pastas valida.")
@@ -309,7 +353,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
             if not isinstance(pasta, dict):
                 raise ValueError(f"Pasta #{idx} inválida no arquivo importado.")
 
-            caminho = pasta.get("caminho")
+            caminho = self._resolver_user_import_path(pasta.get("caminho"))
             entrada = pasta.get("entrada")
             saida = pasta.get("saida")
             if not caminho or not entrada or not saida:
@@ -321,7 +365,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
                 "saida": saida
             }
             if pasta.get("pasta_saida"):
-                pasta_validada["pasta_saida"] = pasta["pasta_saida"]
+                pasta_validada["pasta_saida"] = self._resolver_user_import_path(pasta["pasta_saida"])
 
             pastas_validas.append(pasta_validada)
 
@@ -346,7 +390,7 @@ class JanelaGerenciarSessoes(tk.Toplevel):
             "atlas_session_export": 1,
             "nome_sessao": nome_sessao,
             "exportado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-            "sessao": copy.deepcopy(self.config['sessoes'][nome_sessao])
+            "sessao": self._normalizar_sessao_exportada(self.config['sessoes'][nome_sessao])
         }
 
         try:
